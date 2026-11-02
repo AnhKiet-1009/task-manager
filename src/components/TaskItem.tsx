@@ -18,11 +18,17 @@ export function TaskItem({
   onDeleteTask,
   onUpdateTask,
 }: TaskItemProps) {
-  console.log(task)
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [editPriority, setEditPriority] = useState<TaskPriority>(task.priority);
   const [editError, setEditError] = useState<string>("");
+
+  const handleStartEdit = () => {
+    setEditTitle(task.title);
+    setEditPriority(task.priority);
+    setEditError("");
+    setIsEditing(true);
+  };
 
   const handleSaveEdit = () => {
     const trimmedTitle = editTitle.trim();
@@ -145,7 +151,7 @@ export function TaskItem({
           <div className="flex gap-3 text-sm">
             <button
               type="button"
-              onClick={() => setIsEditing(true)}
+              onClick={handleStartEdit}
               className="text-blue-600 hover:text-blue-800 font-medium"
             >
               Sửa

@@ -17,6 +17,7 @@ export const TaskForm = ({ onAddTask }: TaskFormProps) => {
     const newErrors: FormErrors = {};
 
     const trimmedTitle = formData.title.trim();
+    const trimmedDescription = formData.description?.trim() ?? "";
 
     if (!trimmedTitle) {
       newErrors.title = "Không được bỏ trống tiêu đề.";
@@ -24,7 +25,7 @@ export const TaskForm = ({ onAddTask }: TaskFormProps) => {
       newErrors.title = "Tên task phải có ít nhất 3 ký tự.";
     }
 
-    if ((formData.description?.length ?? 0) > 200) {
+    if ((trimmedDescription.length ?? 0) > 200) {
       newErrors.description = "Mô tả tối đa 200 ký tự.";
     }
 

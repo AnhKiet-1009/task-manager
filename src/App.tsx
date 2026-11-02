@@ -22,8 +22,6 @@ export function App() {
       console.error("Lỗi khi đọc dữ liệu từ localStorage: ", error);
       return [];
     }
-
-    return [];
   });
 
   const [filter, setFilter] = useState<TaskFilterState>({
