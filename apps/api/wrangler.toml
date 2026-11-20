@@ -1,0 +1,8 @@
+name = "taskmanager-api"
+main = "src/worker.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+NODE_ENV = "production"
+AI_PROVIDER = "gemini"

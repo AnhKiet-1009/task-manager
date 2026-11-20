@@ -1,0 +1,33 @@
+{
+  "name": "@taskmanager/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.11",
+    "@hono/zod-validator": "^0.9.1",
+    "@taskmanager/db": "workspace:*",
+    "@taskmanager/shared": "workspace:*",
+    "hono": "^4.13.19",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.1"
+  }
+}
