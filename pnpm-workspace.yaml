@@ -13,3 +13,7 @@ minimumReleaseAgeExclude:
   - '@better-auth/prisma-adapter@1.7.27'
   - '@better-auth/telemetry@1.7.27'
   - better-auth@1.7.27
+  - '@tanstack/query-core@5.108.2'
+  - '@tanstack/query-persist-client-core@5.108.2'
+  - '@tanstack/react-query-persist-client@5.108.2'
+  - '@tanstack/react-query@5.108.2'

@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
-import { STORAGE_KEYS } from "../constants/task";
-import type { ThemeMode } from "../types/task";
+import { useEffect } from "react";
+import { create } from "zustand";
+
+export type ThemeMode = "light" | "dark";
+
+const THEME_STORAGE_KEY = "TASKS_APP_THEME";
 
 function getInitialTheme(): ThemeMode {
   try {
-    const saved = localStorage.getItem(STORAGE_KEYS.THEME);
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
     if (saved === "dark" || saved === "light") return saved;
   } catch {
     // Ignore storage read error
@@ -18,8 +21,20 @@ function getInitialTheme(): ThemeMode {
   return "light";
 }
 
+interface ThemeStore {
+  theme: ThemeMode;
+  toggleTheme: () => void;
+}
+
+const useThemeStore = create<ThemeStore>((set) => ({
+  theme: getInitialTheme(),
+  toggleTheme: () =>
+    set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
+}));
+
 export function useTheme() {
-  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const theme = useThemeStore((s) => s.theme);
+  const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -29,15 +44,11 @@ export function useTheme() {
       root.classList.remove("dark");
     }
     try {
-      localStorage.setItem(STORAGE_KEYS.THEME, theme);
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
     } catch {
       // Ignore storage write error
     }
   }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-  };
 
   return { theme, toggleTheme };
 }
