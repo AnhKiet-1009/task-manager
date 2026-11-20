@@ -1,127 +1,78 @@
-import { useState, useEffect, useMemo } from "react";
-import type {
-  Task,
-  TaskFormData,
-  TaskFilterState,
-  TaskPriority,
-} from "./types/task";
-import { TaskForm } from "./components/TaskForm";
+import { useState } from "react";
+import { Header } from "./components/Header";
+import { KanbanBoard } from "./components/KanbanBoard";
 import { TaskFilter } from "./components/TaskFilter";
+import { TaskForm } from "./components/TaskForm";
 import { TaskList } from "./components/TaskList";
+import { TaskModal } from "./components/TaskModal";
+import { TaskStats } from "./components/TaskStats";
+import { Toast } from "./components/Toast";
+import { TaskProvider } from "./context/TaskContext";
+import { useTasks } from "./hooks/useTasks";
+import type { Task, TaskStatus } from "./types/task";
 
-const STORAGE_KEY = "TASKS_APP_DATA";
+function TaskManagerWorkspace() {
+  const { viewMode } = useTasks();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalStatus, setModalStatus] = useState<TaskStatus>("todo");
 
-export function App() {
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    try {
-      const savedTasks = localStorage.getItem(STORAGE_KEY);
-      if (!savedTasks) return [];
-
-      return JSON.parse(savedTasks) as Task[];
-    } catch (error) {
-      console.error("Lỗi khi đọc dữ liệu từ localStorage: ", error);
-      return [];
-    }
-  });
-
-  const [filter, setFilter] = useState<TaskFilterState>({
-    status: "all",
-    priority: "all",
-    searchQuery: "",
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-    } catch (error) {
-      console.error("Lỗi khi ghi dữ liệu vào localStorage:", error);
-    }
-  }, [tasks]);
-
-  const handleAddTask = (data: TaskFormData) => {
-    const newTask: Task = {
-      id: crypto.randomUUID(),
-      title: data.title,
-      description: data.description,
-      priority: data.priority,
-      isCompleted: false,
-      createdAt: Date.now(),
-    };
-    setTasks((prev) => [...prev, newTask]);
+  const handleOpenCreateModal = (status: TaskStatus = "todo") => {
+    setModalStatus(status);
+    setModalOpen(true);
   };
-
-  const handleToggleStatus = (id: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === id ? { ...task, isCompleted: !task.isCompleted } : task,
-      ),
-    );
-  };
-
-  const handleDeleteTask = (id: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== id));
-  };
-
-  const handleUpdateTask = (
-    id: string,
-    updatedTitle: string,
-    updatedPriority: TaskPriority,
-  ) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === id
-          ? {
-              ...task,
-              title: updatedTitle,
-              priority: updatedPriority,
-            }
-          : task,
-      ),
-    );
-  };
-
-  const filteredTasks = useMemo(() => {
-    const query = filter.searchQuery.trim().toLowerCase();
-    return tasks.filter((task) => {
-      const matchStatus =
-        filter.status === "all" ||
-        (filter.status === "completed" && task.isCompleted) ||
-        (filter.status === "pending" && !task.isCompleted);
-
-      const matchPriority =
-        filter.priority === "all" || task.priority === filter.priority;
-
-      const matchSearch =
-        query === "" || task.title.toLowerCase().includes(query);
-
-      return matchStatus && matchPriority && matchSearch;
-    });
-  }, [tasks, filter]);
 
   return (
-    <main className="min-h-screen bg-slate-100 py-10 px-4">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <header className="text-center">
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-            Task Manager
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Ứng dụng quản lý công việc và tiến độ cá nhân
-          </p>
-        </header>
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
+      <main
+        className={`mx-auto px-4 py-6 sm:py-8 space-y-5 transition-all ${
+          viewMode === "board" ? "max-w-7xl" : "max-w-6xl"
+        }`}
+      >
+        <Header />
 
-        <TaskForm onAddTask={handleAddTask} />
+        <TaskStats />
 
-        <TaskFilter filter={filter} onFilterChange={setFilter} />
+        {viewMode === "list" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <aside className="lg:col-span-4 lg:sticky lg:top-6">
+              <TaskForm />
+            </aside>
 
-        <TaskList
-          tasks={filteredTasks}
-          onToggleStatus={handleToggleStatus}
-          onDeleteTask={handleDeleteTask}
-          onUpdateTask={handleUpdateTask}
-        />
-      </div>
-    </main>
+            <section className="lg:col-span-8 space-y-4">
+              <TaskFilter />
+              <TaskList />
+            </section>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <TaskFilter
+              onOpenCreateModal={() => handleOpenCreateModal("todo")}
+            />
+            <KanbanBoard onAddTaskInColumn={handleOpenCreateModal} />
+          </div>
+        )}
+      </main>
+
+      <TaskModal
+        isOpen={modalOpen}
+        defaultStatus={modalStatus}
+        onClose={() => setModalOpen(false)}
+      />
+
+      <Toast />
+    </div>
+  );
+}
+
+interface AppProps {
+  initialTasks?: Task[];
+}
+
+export function App({ initialTasks }: AppProps) {
+  return (
+    <TaskProvider initialTasks={initialTasks}>
+      <TaskManagerWorkspace />
+    </TaskProvider>
   );
 }
 
