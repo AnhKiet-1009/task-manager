@@ -21,6 +21,7 @@
     "@hono/zod-validator": "^0.9.1",
     "@taskmanager/db": "workspace:*",
     "@taskmanager/shared": "workspace:*",
+    "better-auth": "^1.7.27",
     "hono": "^4.13.19",
     "zod": "^4.6.7"
   },

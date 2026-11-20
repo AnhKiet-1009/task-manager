@@ -5,8 +5,9 @@ import {
   STORY_POINT_SCALE,
 } from "@taskmanager/shared";
 import { Hono } from "hono";
+import type { AppEnv } from "../types/env.js";
 
-export const healthRoutes = new Hono()
+export const healthRoutes = new Hono<AppEnv>()
   .get("/health", (c) => {
     return c.json({
       status: "ok",

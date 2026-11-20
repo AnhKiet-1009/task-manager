@@ -35,6 +35,12 @@ export const createWorkspaceSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug chỉ gồm chữ thường, số và dấu gạch ngang"),
 });
 
+export const updateWorkspaceSchema = createWorkspaceSchema.partial();
+
+export const updateMemberRoleSchema = z.object({
+  role: workspaceRoleSchema,
+});
+
 export const createProjectSchema = z.object({
   name: z.string().trim().min(2).max(80),
   key: z
@@ -49,15 +55,26 @@ export const createProjectSchema = z.object({
     .string()
     .trim()
     .regex(/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/, "Định dạng repo phải là owner/repo")
+    .nullable()
     .optional(),
 });
+
+export const updateProjectSchema = createProjectSchema.omit({ key: true }).partial();
 
 export const createWorkflowStateSchema = z.object({
   name: z.string().trim().min(1).max(50),
   category: z.enum(WORKFLOW_STATE_CATEGORIES),
   color: hexColorString.default("#64748b"),
   wipLimit: z.number().int().min(1).max(100).nullable().optional(),
+  position: z.string().min(1).optional(),
   isDefault: z.boolean().optional(),
+});
+
+export const updateWorkflowStateSchema = createWorkflowStateSchema.partial();
+
+export const createLabelSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  color: hexColorString.default("#6366f1"),
 });
 
 // ==============================================
@@ -73,6 +90,24 @@ export const createSprintSchema = z.object({
 });
 
 export const updateSprintSchema = createSprintSchema.partial();
+
+export const completeSprintSchema = z.object({
+  moveIncompleteToSprintId: z.string().uuid().nullable().optional(),
+});
+
+export const issueListQuerySchema = z.object({
+  sprintId: z.string().uuid().optional(),
+  backlogOnly: z
+    .enum(["true", "false"])
+    .transform((v) => v === "true")
+    .optional(),
+  stateId: z.string().uuid().optional(),
+  type: z.enum(ISSUE_TYPES).optional(),
+  priority: z.enum(ISSUE_PRIORITIES).optional(),
+  assigneeId: z.string().optional(),
+  parentId: z.string().uuid().optional(),
+  search: z.string().trim().max(200).optional(),
+});
 
 export const createIssueSchema = z.object({
   title: z.string().trim().min(2).max(200),
@@ -192,10 +227,16 @@ export const realtimeEventSchema = z.object({
 });
 
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
+export type UpdateWorkspaceInput = z.infer<typeof updateWorkspaceSchema>;
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type CreateWorkflowStateInput = z.infer<typeof createWorkflowStateSchema>;
+export type UpdateWorkflowStateInput = z.infer<typeof updateWorkflowStateSchema>;
+export type CreateLabelInput = z.infer<typeof createLabelSchema>;
 export type CreateSprintInput = z.infer<typeof createSprintSchema>;
 export type UpdateSprintInput = z.infer<typeof updateSprintSchema>;
+export type CompleteSprintInput = z.infer<typeof completeSprintSchema>;
+export type IssueListQuery = z.infer<typeof issueListQuerySchema>;
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 export type UpdateIssueInput = z.infer<typeof updateIssueSchema>;
 export type MoveIssueInput = z.infer<typeof moveIssueSchema>;

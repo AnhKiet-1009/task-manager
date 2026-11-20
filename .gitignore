@@ -13,6 +13,7 @@ dist
 dist-ssr
 .turbo
 .wrangler
+.pglite-data
 coverage
 *.tsbuildinfo
 

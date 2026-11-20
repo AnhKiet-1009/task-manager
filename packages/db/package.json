@@ -15,9 +15,19 @@
       "types": "./dist/schema/index.d.ts",
       "import": "./dist/schema/index.js",
       "default": "./dist/schema/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
+    },
+    "./pglite": {
+      "types": "./dist/pglite.d.ts",
+      "import": "./dist/pglite.js",
+      "default": "./dist/pglite.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "drizzle"],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -27,6 +37,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.17",
     "@neondatabase/serverless": "^1.2.1",
     "@taskmanager/shared": "workspace:*",
     "drizzle-orm": "^0.45.4",

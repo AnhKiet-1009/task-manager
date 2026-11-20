@@ -1,26 +1,20 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
-import { drizzle as drizzleNode } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { Pool as NeonPool } from "@neondatabase/serverless";
+import { drizzle as drizzleNeon } from "drizzle-orm/neon-serverless";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema/index.js";
 
 /**
- * Node.js / Docker PostgreSQL client (local dev, CI, Node containers).
+ * Runtime-agnostic Drizzle PostgreSQL database type shared across
+ * Node.js (pg), Cloudflare Workers (Neon Serverless), and PGlite (local/tests).
  */
-export function createNodeDb(connectionString: string) {
-  const pool = new Pool({ connectionString });
-  const db = drizzleNode(pool, { schema });
-  return { db, pool };
-}
+export type AppDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 /**
- * Serverless HTTP client for Cloudflare Workers + Neon PostgreSQL Free Tier.
+ * Serverless WebSocket client for Cloudflare Workers + Neon PostgreSQL Free Tier.
+ * Supports full interactive transactions (`db.transaction(...)`).
  */
 export function createEdgeDb(connectionString: string) {
-  const sql = neon(connectionString);
-  return drizzleNeon(sql, { schema });
+  const pool = new NeonPool({ connectionString });
+  const db = drizzleNeon(pool, { schema });
+  return { db: db as unknown as AppDatabase, pool };
 }
-
-export type NodeDatabase = ReturnType<typeof createNodeDb>["db"];
-export type EdgeDatabase = ReturnType<typeof createEdgeDb>;
-export type AppDatabase = NodeDatabase | EdgeDatabase;

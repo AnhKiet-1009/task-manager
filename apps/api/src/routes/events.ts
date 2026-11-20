@@ -1,11 +1,15 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { eventBus } from "../realtime/event-bus.js";
+import { requireAuth, requireWorkspaceRole } from "../middleware/auth.js";
+import type { AppEnv } from "../types/env.js";
 
-export const eventRoutes = new Hono().get(
+export const eventRoutes = new Hono<AppEnv>().get(
   "/api/v1/workspaces/:workspaceId/events",
+  requireAuth,
+  requireWorkspaceRole("viewer"),
   (c) => {
     const workspaceId = c.req.param("workspaceId");
+    const bus = c.var.eventBus;
 
     return streamSSE(c, async (stream) => {
       await stream.writeSSE({
@@ -16,7 +20,7 @@ export const eventRoutes = new Hono().get(
         }),
       });
 
-      const unsubscribe = eventBus.subscribe(workspaceId, (event) => {
+      const unsubscribe = bus.subscribe(workspaceId, (event) => {
         void stream.writeSSE({
           id: event.id,
           event: event.type,

@@ -1,6 +1,20 @@
 export const WORKSPACE_ROLES = ["owner", "admin", "member", "viewer"] as const;
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
+export const WORKSPACE_ROLE_WEIGHT: Record<WorkspaceRole, number> = {
+  viewer: 1,
+  member: 2,
+  admin: 3,
+  owner: 4,
+};
+
+export function hasMinimumRole(
+  actual: WorkspaceRole,
+  required: WorkspaceRole,
+): boolean {
+  return WORKSPACE_ROLE_WEIGHT[actual] >= WORKSPACE_ROLE_WEIGHT[required];
+}
+
 export const WORKFLOW_STATE_CATEGORIES = [
   "backlog",
   "unstarted",
