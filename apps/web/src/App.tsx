@@ -1,7 +1,9 @@
-import { useEffect, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FolderPlus, Loader2, Sparkles } from "lucide-react";
 import { ToastStack } from "./components/ui/ToastStack";
+import { AiSettingsModal } from "./features/ai/AiSettingsModal";
+import { PrdBreakdownModal } from "./features/ai/PrdBreakdownModal";
 import { AuthScreen } from "./features/auth/AuthScreen";
 import { BacklogSprintView } from "./features/backlog/BacklogSprintView";
 import { CompleteSprintModal } from "./features/backlog/CompleteSprintModal";
@@ -28,6 +30,12 @@ import { useWorkspaceRealtime } from "./hooks/useWorkspaceRealtime";
 import type { MeResponse } from "./lib/api";
 import { createQueryClient } from "./lib/queryClient";
 import { useUiStore } from "./stores/uiStore";
+
+const AnalyticsDashboard = lazy(() =>
+  import("./features/analytics/AnalyticsDashboard").then((m) => ({
+    default: m.AnalyticsDashboard,
+  })),
+);
 
 function AgileWorkspaceShell({ me }: { me: MeResponse }) {
   const activeWorkspaceId = useUiStore((s) => s.activeWorkspaceId);
@@ -187,6 +195,22 @@ function AgileWorkspaceShell({ me }: { me: MeResponse }) {
                   sprints={sprints}
                   issues={issues}
                 />
+              ) : activeView === "analytics" ? (
+                <Suspense
+                  fallback={
+                    <div className="py-24 flex items-center justify-center gap-2 text-xs text-slate-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Đang tải Sprint Analytics & AI Risk Radar...
+                    </div>
+                  }
+                >
+                  <AnalyticsDashboard
+                    projectId={resolvedProjectId}
+                    role={role}
+                    sprints={sprints}
+                    issues={issues}
+                  />
+                </Suspense>
               ) : (
                 <EpicsView role={role} issues={issues} />
               )}
@@ -223,6 +247,8 @@ function AgileWorkspaceShell({ me }: { me: MeResponse }) {
       />
       <WorkflowStateModal projectId={resolvedProjectId} />
       <WorkspaceProjectModal workspaceId={activeWorkspace?.id ?? null} />
+      <PrdBreakdownModal projectId={resolvedProjectId} sprints={sprints} />
+      <AiSettingsModal workspaceId={activeWorkspace?.id ?? null} role={role} />
       <CommandPalette issues={issues} role={role} />
     </div>
   );

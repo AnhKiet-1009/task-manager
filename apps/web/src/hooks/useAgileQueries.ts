@@ -4,6 +4,10 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  type AIBreakdownRequest,
+  type AICommitBreakdownInput,
+  type AINaturalLanguageFilterRequest,
+  type AISprintRiskRequest,
   type CompleteSprintInput,
   type CreateIssueInput,
   type CreateProjectInput,
@@ -13,9 +17,11 @@ import {
   generateRankBetween,
   type IssueRelationType,
   type MoveIssueInput,
+  type SimulateGitHubPrInput,
   type UpdateIssueInput,
   type UpdateSprintInput,
   type UpdateWorkflowStateInput,
+  type WorkspaceAiSettingsInput,
 } from "@taskmanager/shared";
 import {
   api,
@@ -679,6 +685,177 @@ export function useDeleteIssueRelation(projectId: string | null) {
     },
     onError: (err) => {
       pushToast(getErrorMessage(err, "Không thể gỡ liên kết."), "error");
+    },
+  });
+}
+
+// ==============================================
+// Sprint Analytics, AI Copilot & GitHub Simulator
+// ==============================================
+
+export function useProjectAnalytics(
+  projectId: string | null,
+  sprintId?: string | null,
+) {
+  return useQuery({
+    queryKey: queryKeys.analytics(projectId ?? "", sprintId),
+    queryFn: () =>
+      api
+        .getProjectAnalytics(projectId!, sprintId)
+        .then((r) => r.analytics),
+    enabled: Boolean(projectId),
+  });
+}
+
+export function useAiSettings(workspaceId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.aiSettings(workspaceId ?? ""),
+    queryFn: () =>
+      api.getAiSettings(workspaceId!).then((r) => r.settings),
+    enabled: Boolean(workspaceId),
+  });
+}
+
+export function useUpdateAiSettings(workspaceId: string | null) {
+  const qc = useQueryClient();
+  const pushToast = useUiStore((s) => s.pushToast);
+
+  return useMutation({
+    mutationFn: (input: WorkspaceAiSettingsInput) => {
+      if (!workspaceId) throw new Error("Chưa chọn Workspace.");
+      return api.updateAiSettings(workspaceId, input);
+    },
+    onSuccess: async ({ settings }) => {
+      if (workspaceId) {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: queryKeys.aiSettings(workspaceId) }),
+          qc.invalidateQueries({ queryKey: queryKeys.workspace(workspaceId) }),
+        ]);
+      }
+      pushToast(
+        settings.hasByokKey
+          ? `Đã mã hóa & lưu BYOK Key (${settings.provider.toUpperCase()}).`
+          : "Đã cập nhật cấu hình AI Workspace.",
+        "success",
+      );
+    },
+    onError: (err) => {
+      pushToast(
+        getErrorMessage(err, "Không thể lưu cấu hình AI BYOK."),
+        "error",
+      );
+    },
+  });
+}
+
+export function usePrdBreakdown() {
+  const pushToast = useUiStore((s) => s.pushToast);
+
+  return useMutation({
+    mutationFn: (input: AIBreakdownRequest) => api.generatePrdBreakdown(input),
+    onError: (err) => {
+      pushToast(
+        getErrorMessage(err, "Không thể phân tích PRD bằng AI."),
+        "error",
+      );
+    },
+  });
+}
+
+export function useCommitPrdBreakdown(projectId: string | null) {
+  const qc = useQueryClient();
+  const pushToast = useUiStore((s) => s.pushToast);
+
+  return useMutation({
+    mutationFn: (input: AICommitBreakdownInput) => api.commitPrdBreakdown(input),
+    onSuccess: async (res) => {
+      if (projectId) {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: queryKeys.issues(projectId) }),
+          qc.invalidateQueries({ queryKey: queryKeys.sprints(projectId) }),
+          qc.invalidateQueries({ queryKey: ["analytics", projectId] }),
+        ]);
+      }
+      pushToast(
+        `Đã tạo ${res.epic.identifier} và ${res.issues.length} Issues con (${res.relationsCreated} liên kết).`,
+        "success",
+      );
+    },
+    onError: (err) => {
+      pushToast(
+        getErrorMessage(err, "Không thể lưu Backlog từ AI."),
+        "error",
+      );
+    },
+  });
+}
+
+export function useAnalyzeSprintRisk() {
+  const pushToast = useUiStore((s) => s.pushToast);
+
+  return useMutation({
+    mutationFn: (input: AISprintRiskRequest) => api.analyzeSprintRisk(input),
+    onError: (err) => {
+      pushToast(
+        getErrorMessage(err, "Không thể phân tích rủi ro Sprint."),
+        "error",
+      );
+    },
+  });
+}
+
+export function useParseNaturalLanguageFilter() {
+  const pushToast = useUiStore((s) => s.pushToast);
+  const setAiFilter = useUiStore((s) => s.setAiFilter);
+
+  return useMutation({
+    mutationFn: (input: AINaturalLanguageFilterRequest) =>
+      api.parseNaturalLanguageFilter(input),
+    onSuccess: ({ filter }) => {
+      setAiFilter(filter);
+      pushToast(filter.explanation, "info");
+    },
+    onError: (err) => {
+      pushToast(
+        getErrorMessage(err, "Không thể phân tích truy vấn lọc AI."),
+        "error",
+      );
+    },
+  });
+}
+
+export function useSimulateGitHubPr(projectId: string | null) {
+  const qc = useQueryClient();
+  const pushToast = useUiStore((s) => s.pushToast);
+
+  return useMutation({
+    mutationFn: (input: SimulateGitHubPrInput) => {
+      if (!projectId) throw new Error("Chưa chọn Project.");
+      return api.simulateGitHubPr(projectId, input);
+    },
+    onSuccess: async (res) => {
+      if (projectId) {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: queryKeys.issues(projectId) }),
+          qc.invalidateQueries({ queryKey: queryKeys.sprints(projectId) }),
+          qc.invalidateQueries({ queryKey: ["analytics", projectId] }),
+        ]);
+      }
+      const first = res.updatedIssues[0];
+      if (first) {
+        pushToast(
+          `GitHub PR #${res.prNumber} (${res.status}) → ${first.identifier} ${first.transitioned ? `chuyển sang "${first.nextStateName}"` : "đã liên kết PR"}.`,
+          "success",
+        );
+      } else {
+        pushToast("Không tìm thấy mã Issue phù hợp để đồng bộ PR.", "warning");
+      }
+    },
+    onError: (err) => {
+      pushToast(
+        getErrorMessage(err, "Không thể mô phỏng GitHub PR Webhook."),
+        "error",
+      );
     },
   });
 }

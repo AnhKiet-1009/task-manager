@@ -1,4 +1,5 @@
 import { createEdgeDb } from "@taskmanager/db";
+import type { AiProvider } from "@taskmanager/shared";
 import { createApp } from "./app.js";
 
 export interface WorkerEnv {
@@ -8,6 +9,16 @@ export interface WorkerEnv {
   BETTER_AUTH_URL: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
+  GITHUB_WEBHOOK_SECRET?: string;
+  AI_PROVIDER?: AiProvider;
+  GEMINI_API_KEY?: string;
+  GROQ_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
+  BYOK_ENCRYPTION_KEY?: string;
+  UPSTASH_REDIS_REST_URL?: string;
+  UPSTASH_REDIS_REST_TOKEN?: string;
 }
 
 /**
@@ -25,6 +36,16 @@ export default {
         authBaseUrl: env.BETTER_AUTH_URL,
         githubClientId: env.GITHUB_CLIENT_ID,
         githubClientSecret: env.GITHUB_CLIENT_SECRET,
+        githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET,
+        aiProvider: env.AI_PROVIDER,
+        geminiApiKey: env.GEMINI_API_KEY,
+        groqApiKey: env.GROQ_API_KEY,
+        openaiApiKey: env.OPENAI_API_KEY,
+        anthropicApiKey: env.ANTHROPIC_API_KEY,
+        openrouterApiKey: env.OPENROUTER_API_KEY,
+        byokEncryptionKey: env.BYOK_ENCRYPTION_KEY,
+        upstashRedisRestUrl: env.UPSTASH_REDIS_REST_URL,
+        upstashRedisRestToken: env.UPSTASH_REDIS_REST_TOKEN,
       });
       return await app.fetch(request);
     } finally {

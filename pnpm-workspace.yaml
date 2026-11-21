@@ -48,3 +48,9 @@ minimumReleaseAgeExclude:
   - '@tiptap/pm@3.35.0'
   - '@tiptap/react@3.35.0'
   - '@tiptap/starter-kit@3.35.0'
+  - '@ai-sdk/anthropic@4.0.107'
+  - '@ai-sdk/gateway@4.0.152'
+  - '@ai-sdk/google@4.0.124'
+  - '@ai-sdk/openai@4.0.122'
+  - '@ai-sdk/provider-utils@5.0.83'
+  - ai@7.0.179

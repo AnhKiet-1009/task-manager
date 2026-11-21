@@ -4,9 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type {
+  AiSettingsDto,
   IssueDetailDto,
   IssueListItem,
   MeResponse,
+  ProjectAnalyticsDto,
   ProjectDetailResponse,
   SprintDto,
   WorkflowStateDto,
@@ -242,6 +244,17 @@ function setupMockFetch(options: {
   let seq = 18;
   let relSeq = 1;
   let commentSeq = 1;
+  let aiSettingsState: AiSettingsDto = {
+    provider: "gemini",
+    model: "gemini-2.5-flash",
+    hasByokKey: false,
+    quota: {
+      allowed: true,
+      used: 2,
+      limit: 15,
+      remaining: 13,
+    },
+  };
 
   const outgoingRelationsByIssue = new Map<
     string,
@@ -519,6 +532,321 @@ function setupMockFetch(options: {
           activityLogs: [...(activityLogsByIssue.get(found.id) ?? [])],
         };
         return jsonResponse({ issue: detail });
+      }
+
+      if (
+        url.includes(`/api/v1/projects/${PROJ_ID}/analytics`) &&
+        method === "GET"
+      ) {
+        const analytics: ProjectAnalyticsDto = {
+          projectId: PROJ_ID,
+          selectedSprint: {
+            id: SPRINT_ACTIVE_ID,
+            name: "Sprint 14 — AI Copilot",
+            goal: "Ship Kanban & AI Radar",
+            status: "active",
+            startDate: "2026-11-14",
+            endDate: "2026-11-28",
+            daysTotal: 14,
+            daysElapsed: 7,
+            daysRemaining: 7,
+          },
+          summary: {
+            totalIssues: 3,
+            completedIssues: 1,
+            totalPoints: 16,
+            completedPoints: 3,
+            remainingPoints: 13,
+            completionPercent: 19,
+            averageVelocity: 24,
+            stalledCount: 1,
+            overdueCount: 1,
+            unassignedHighPriorityCount: 1,
+            wipBreachCount: 1,
+          },
+          burndown: [
+            {
+              date: "2026-11-14",
+              label: "14/11",
+              idealPoints: 16,
+              remainingPoints: 16,
+              completedPoints: 0,
+            },
+            {
+              date: "2026-11-16",
+              label: "16/11",
+              idealPoints: 12,
+              remainingPoints: 13,
+              completedPoints: 3,
+            },
+          ],
+          velocity: [
+            {
+              sprintId: SPRINT_ACTIVE_ID,
+              name: "Sprint 14 — AI Copilot",
+              status: "active",
+              plannedPoints: 16,
+              completedPoints: 3,
+              totalIssues: 3,
+              completedIssues: 1,
+            },
+          ],
+          workload: [
+            {
+              assigneeId: "u-1",
+              assigneeName: "Demo Engineer",
+              totalIssues: 2,
+              inProgressIssues: 1,
+              totalPoints: 11,
+              completedPoints: 3,
+              overdueCount: 0,
+            },
+            {
+              assigneeId: null,
+              assigneeName: "Chưa phân công",
+              totalIssues: 1,
+              inProgressIssues: 1,
+              totalPoints: 5,
+              completedPoints: 0,
+              overdueCount: 1,
+            },
+          ],
+          stalledIssues: [
+            {
+              id: "55555555-5555-4555-8555-555555555551",
+              identifier: "ENG-12",
+              title: "Xây dựng AI Sprint Risk Radar",
+              stateName: "In Progress",
+              assigneeName: "Demo Engineer",
+              storyPoints: 8,
+              hoursStalled: 96,
+              dueDate: "2026-11-25",
+              isOverdue: false,
+            },
+          ],
+          wipBreaches: [
+            {
+              stateId: STATE_INPROG_ID,
+              stateName: "In Progress",
+              wipLimit: 1,
+              currentCount: 2,
+            },
+          ],
+        };
+        return jsonResponse({ analytics });
+      }
+
+      if (
+        url.endsWith(`/api/v1/workspaces/${WS_ID}/ai/settings`) &&
+        method === "GET"
+      ) {
+        return jsonResponse({ settings: aiSettingsState });
+      }
+
+      if (
+        url.endsWith(`/api/v1/workspaces/${WS_ID}/ai/settings`) &&
+        method === "PUT"
+      ) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          provider: AiSettingsDto["provider"];
+          model?: string;
+          apiKey?: string;
+          clearKey?: boolean;
+        };
+        aiSettingsState = {
+          ...aiSettingsState,
+          provider: body.provider,
+          model: body.model || aiSettingsState.model,
+          hasByokKey: body.clearKey
+            ? false
+            : body.apiKey
+              ? true
+              : aiSettingsState.hasByokKey,
+        };
+        return jsonResponse({ settings: aiSettingsState });
+      }
+
+      if (url.endsWith("/api/v1/ai/sprint-risk") && method === "POST") {
+        return jsonResponse({
+          report: {
+            riskLevel: "high",
+            riskScore: 72,
+            summary:
+              "Sprint 14 đang có 1 issue bị kẹt quá 72 giờ và cột In Progress vượt giới hạn WIP.",
+            bottlenecks: ["ENG-12 đứng im 4 ngày trong cột In Progress"],
+            stalledIssueIdentifiers: ["ENG-12"],
+            recommendations: [
+              "Tách nhỏ ENG-12 và bổ sung reviewer ngay trong Daily Standup.",
+              "Gán người phụ trách cho bug ưu tiên cao ENG-13.",
+            ],
+          },
+          meta: {
+            mode: "smart_fallback",
+            provider: "gemini",
+            model: "smart-agile-analyzer-v1",
+            usedByok: false,
+            quotaRemaining: 12,
+          },
+        });
+      }
+
+      if (url.endsWith("/api/v1/ai/prd-breakdown") && method === "POST") {
+        return jsonResponse({
+          breakdown: {
+            epic: {
+              title: "Hệ thống Thông báo Realtime đa kênh",
+              descriptionMd: "Epic tự động sinh từ PRD.",
+            },
+            issues: [
+              {
+                tempId: "T1",
+                title: "Thiết kế bảng notifications & API đánh dấu đã đọc",
+                descriptionMd: "Tạo migration Drizzle và REST API.",
+                type: "story",
+                priority: "high",
+                storyPoints: 5,
+                blockedByTempIds: [],
+              },
+              {
+                tempId: "T2",
+                title: "Xây dựng Popover chuông thông báo trên TopBar",
+                descriptionMd: "Hiển thị đếm chưa đọc realtime qua SSE.",
+                type: "task",
+                priority: "medium",
+                storyPoints: 3,
+                blockedByTempIds: ["T1"],
+              },
+            ],
+            rationale:
+              "Đã phân rã PRD thành 1 Epic và 2 hạng mục theo trình tự Backend → Frontend.",
+          },
+          meta: {
+            mode: "smart_fallback",
+            provider: "gemini",
+            model: "smart-agile-breakdown-v1",
+            usedByok: false,
+            quotaRemaining: 11,
+          },
+        });
+      }
+
+      if (
+        url.endsWith("/api/v1/ai/prd-breakdown/commit") &&
+        method === "POST"
+      ) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          sprintId?: string | null;
+          epic: { title: string; descriptionMd: string };
+          issues: Array<{
+            tempId: string;
+            title: string;
+            descriptionMd: string;
+            type: IssueListItem["type"];
+            priority: IssueListItem["priority"];
+            storyPoints: number;
+          }>;
+        };
+        seq += 1;
+        const epicId = `55555555-5555-4555-8555-5555555555${seq}`;
+        const epicIdentifier = `ENG-${seq}`;
+        currentIssues.push({
+          ...mockIssues[0]!,
+          id: epicId,
+          identifier: epicIdentifier,
+          title: body.epic.title,
+          descriptionMd: body.epic.descriptionMd,
+        });
+        const createdList = body.issues.map((item) => {
+          seq += 1;
+          const created: IssueListItem = {
+            ...mockIssues[1]!,
+            id: `55555555-5555-4555-8555-5555555555${seq}`,
+            identifier: `ENG-${seq}`,
+            title: item.title,
+            descriptionMd: item.descriptionMd,
+            type: item.type,
+            priority: item.priority,
+            storyPoints: item.storyPoints,
+            parentId: epicId,
+            sprintId: body.sprintId ?? SPRINT_ACTIVE_ID,
+            stateId: STATE_TODO_ID,
+            state: mockStates[0]!,
+            externalLinks: [],
+            labels: [],
+          };
+          currentIssues.push(created);
+          return {
+            id: created.id,
+            identifier: created.identifier,
+            title: created.title,
+          };
+        });
+        return jsonResponse(
+          {
+            epic: {
+              id: epicId,
+              identifier: epicIdentifier,
+              title: body.epic.title,
+            },
+            issues: createdList,
+            relationsCreated: 1,
+          },
+          201,
+        );
+      }
+
+      if (url.endsWith("/api/v1/ai/nl-filter") && method === "POST") {
+        return jsonResponse({
+          filter: {
+            types: ["bug"],
+            priorities: ["high", "urgent"],
+            unassignedOnly: true,
+            explanation:
+              "Đang lọc AI: Bug ưu tiên Cao/Khẩn cấp và chưa có người phụ trách.",
+          },
+          meta: {
+            mode: "smart_fallback",
+            provider: "gemini",
+            model: "smart-nl-filter-v1",
+            usedByok: false,
+            quotaRemaining: 10,
+          },
+        });
+      }
+
+      if (
+        url.endsWith(`/api/v1/projects/${PROJ_ID}/github/simulate-pr`) &&
+        method === "POST"
+      ) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          issueIdentifier: string;
+          action: "opened" | "merged";
+        };
+        const target = currentIssues.find(
+          (i) => i.identifier === body.issueIdentifier,
+        );
+        if (target && body.action === "merged") {
+          target.stateId = STATE_DONE_ID;
+          target.state = mockStates[2]!;
+        }
+        return jsonResponse({
+          simulated: true,
+          prNumber: "404",
+          status: body.action === "merged" ? "merged" : "open",
+          matchedIdentifiers: [body.issueIdentifier],
+          updatedIssues: target
+            ? [
+                {
+                  id: target.id,
+                  identifier: target.identifier,
+                  previousStateName: "In Progress",
+                  nextStateName:
+                    body.action === "merged" ? "Done" : "In Review",
+                  transitioned: true,
+                },
+              ]
+            : [],
+        });
       }
 
       return jsonResponse({ error: { code: "NOT_MOCKED", url } }, 404);
@@ -815,5 +1143,143 @@ describe("Phase 2 Core Agile Engine UI", () => {
       ).length;
       expect(issueFetchCountAfter).toBeGreaterThan(issueFetchCountBefore);
     });
+  });
+
+  it("renders Sprint Analytics Dashboard, runs AI Sprint Risk Radar, and simulates GitHub PR merge", async () => {
+    setupMockFetch({ initialAuth: true });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const user = userEvent.setup();
+
+    render(<App queryClient={qc} />);
+    await screen.findByTestId("kanban-column-in-progress");
+
+    // Navigate to Analytics & AI Radar via Sidebar
+    await user.click(
+      screen.getByRole("button", { name: /analytics & ai radar/i }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: /sprint analytics & ai risk radar/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(/sprint burndown chart/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/biểu đồ team velocity/i)).toBeInTheDocument();
+    expect(screen.getByText(/phân bổ tải công việc/i)).toBeInTheDocument();
+
+    // Run AI Sprint Risk Radar scan
+    await user.click(
+      screen.getByRole("button", { name: /quét rủi ro sprint bằng ai/i }),
+    );
+    expect(
+      await screen.findByText(/cao \(cần chú ý\) \(72\/100\)/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/tách nhỏ eng-12 và bổ sung reviewer/i),
+    ).toBeInTheDocument();
+
+    // Simulate GitHub PR Merge -> Done
+    await user.click(screen.getByRole("button", { name: /merge → done/i }));
+    await user.click(
+      screen.getByRole("button", { name: /chạy đồng bộ github pr/i }),
+    );
+    expect(
+      await screen.findByText(/github pr #404 \(merged\)/i),
+    ).toBeInTheDocument();
+  });
+
+  it("generates and commits Epic + Issues with AI PRD-to-Backlog, applies Natural Language AI Filter, and saves BYOK Vault settings", async () => {
+    setupMockFetch({ initialAuth: true });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const user = userEvent.setup();
+
+    render(<App queryClient={qc} />);
+    await screen.findByTestId("kanban-column-in-progress");
+
+    // 1. Natural Language AI Filter on Kanban Board
+    const nlInput = screen.getByLabelText(/lọc bằng ngôn ngữ tự nhiên ai/i);
+    await user.type(nlInput, "bug ưu tiên cao chưa có người làm");
+    await user.click(screen.getByRole("button", { name: /^lọc ai$/i }));
+
+    const aiBanner = await screen.findByTestId("ai-filter-banner");
+    expect(aiBanner).toHaveTextContent(
+      /đang lọc ai: bug ưu tiên cao\/khẩn cấp/i,
+    );
+    expect(
+      screen.getByText("Sửa race condition GitHub Webhook"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Xây dựng AI Sprint Risk Radar"),
+    ).not.toBeInTheDocument();
+
+    // Clear AI Filter -> restores ENG-12
+    await user.click(screen.getByRole("button", { name: /xóa lọc ai/i }));
+    expect(
+      await screen.findByText("Xây dựng AI Sprint Risk Radar"),
+    ).toBeInTheDocument();
+
+    // 2. AI PRD-to-Backlog Generator Modal
+    await user.click(screen.getByRole("button", { name: /ai backlog/i }));
+    const prdDialog = await screen.findByRole("dialog", {
+      name: /ai prd-to-backlog generator/i,
+    });
+    await user.click(
+      within(prdDialog).getByRole("button", {
+        name: /mẫu: thông báo realtime đa kênh/i,
+      }),
+    );
+    await user.click(
+      within(prdDialog).getByRole("button", { name: /phân tích bằng ai/i }),
+    );
+    expect(
+      await within(prdDialog).findByText(
+        "Thiết kế bảng notifications & API đánh dấu đã đọc",
+      ),
+    ).toBeInTheDocument();
+    await user.click(
+      within(prdDialog).getByRole("button", {
+        name: /tạo hàng loạt \(1 epic \+ 2 issues\)/i,
+      }),
+    );
+    expect(
+      await screen.findByText(
+        "Thiết kế bảng notifications & API đánh dấu đã đọc",
+      ),
+    ).toBeInTheDocument();
+
+    // 3. AI Copilot & BYOK Settings Modal
+    await user.click(
+      screen.getByRole("button", { name: /cài đặt ai \(byok\)/i }),
+    );
+    const settingsDialog = await screen.findByRole("dialog", {
+      name: /cấu hình ai byok/i,
+    });
+    const providerSelect = await within(settingsDialog).findByLabelText(
+      /nhà cung cấp llm/i,
+    );
+    await user.selectOptions(providerSelect, "groq");
+    const keyInput = within(settingsDialog).getByLabelText(/api key riêng/i);
+    await user.type(keyInput, "gsk_test_secret_key_123456");
+    await user.click(
+      within(settingsDialog).getByRole("button", { name: /lưu cấu hình/i }),
+    );
+
+    // Reopen to verify AES-256-GCM BYOK active status
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: /cấu hình ai byok/i }),
+      ).not.toBeInTheDocument();
+    });
+    await user.click(
+      screen.getByRole("button", { name: /cài đặt ai \(byok\)/i }),
+    );
+    expect(
+      await screen.findByText(/không giới hạn \(byok\)/i),
+    ).toBeInTheDocument();
   });
 });

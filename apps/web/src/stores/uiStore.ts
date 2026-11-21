@@ -1,9 +1,9 @@
-import type { IssueType } from "@taskmanager/shared";
+import type { IssueType, NaturalLanguageFilter } from "@taskmanager/shared";
 import { create } from "zustand";
 import type { SprintDto, WorkflowStateDto } from "../lib/api";
 import type { IssueFilterValues } from "../lib/agileMeta";
 
-export type AgileView = "board" | "backlog" | "epics";
+export type AgileView = "board" | "backlog" | "epics" | "analytics";
 export type RealtimeStatus =
   | "idle"
   | "connecting"
@@ -41,6 +41,7 @@ interface UiStore {
   sidebarOpen: boolean;
 
   filters: IssueFilterValues;
+  aiFilter: NaturalLanguageFilter | null;
 
   realtimeStatus: RealtimeStatus;
   issueDrawerId: string | null;
@@ -49,6 +50,8 @@ interface UiStore {
   completeSprintId: string | null;
   workflowStateModal: { open: boolean; state?: WorkflowStateDto };
   workspaceProjectModal: { open: boolean; mode: "workspace" | "project" };
+  prdModalOpen: boolean;
+  aiSettingsModalOpen: boolean;
   commandPaletteOpen: boolean;
 
   toasts: ToastItem[];
@@ -61,6 +64,7 @@ interface UiStore {
   setRealtimeStatus: (status: RealtimeStatus) => void;
 
   setFilters: (partial: Partial<IssueFilterValues>) => void;
+  setAiFilter: (filter: NaturalLanguageFilter | null) => void;
   resetFilters: () => void;
 
   openCreateIssueModal: (defaults?: {
@@ -84,6 +88,9 @@ interface UiStore {
   openWorkspaceProjectModal: (mode: "workspace" | "project") => void;
   closeWorkspaceProjectModal: () => void;
 
+  setPrdModalOpen: (open: boolean) => void;
+  setAiSettingsModalOpen: (open: boolean) => void;
+
   setCommandPaletteOpen: (open: boolean) => void;
   toggleCommandPalette: () => void;
 
@@ -100,6 +107,7 @@ export const useUiStore = create<UiStore>((set) => ({
   sidebarOpen: false,
 
   filters: DEFAULT_FILTERS,
+  aiFilter: null,
 
   realtimeStatus: "idle",
   issueDrawerId: null,
@@ -108,6 +116,8 @@ export const useUiStore = create<UiStore>((set) => ({
   completeSprintId: null,
   workflowStateModal: { open: false },
   workspaceProjectModal: { open: false, mode: "project" },
+  prdModalOpen: false,
+  aiSettingsModalOpen: false,
   commandPaletteOpen: false,
 
   toasts: [],
@@ -118,12 +128,14 @@ export const useUiStore = create<UiStore>((set) => ({
       activeProjectId: null,
       boardSprintId: null,
       issueDrawerId: null,
+      aiFilter: null,
     }),
   setActiveProjectId: (id) =>
     set({
       activeProjectId: id,
       boardSprintId: null,
       filters: DEFAULT_FILTERS,
+      aiFilter: null,
       issueDrawerId: null,
     }),
   setActiveView: (view) => set({ activeView: view, sidebarOpen: false }),
@@ -133,7 +145,8 @@ export const useUiStore = create<UiStore>((set) => ({
 
   setFilters: (partial) =>
     set((state) => ({ filters: { ...state.filters, ...partial } })),
-  resetFilters: () => set({ filters: DEFAULT_FILTERS }),
+  setAiFilter: (aiFilter) => set({ aiFilter }),
+  resetFilters: () => set({ filters: DEFAULT_FILTERS, aiFilter: null }),
 
   openCreateIssueModal: (defaults) =>
     set({
@@ -167,6 +180,9 @@ export const useUiStore = create<UiStore>((set) => ({
       workspaceProjectModal: { ...s.workspaceProjectModal, open: false },
     })),
 
+  setPrdModalOpen: (prdModalOpen) => set({ prdModalOpen }),
+  setAiSettingsModalOpen: (aiSettingsModalOpen) => set({ aiSettingsModalOpen }),
+
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   toggleCommandPalette: () =>
     set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
@@ -191,7 +207,10 @@ export const useUiStore = create<UiStore>((set) => ({
       realtimeStatus: "idle",
       issueDrawerId: null,
       filters: DEFAULT_FILTERS,
+      aiFilter: null,
       issueModal: { open: false, mode: "create" },
+      prdModalOpen: false,
+      aiSettingsModalOpen: false,
       commandPaletteOpen: false,
     }),
 }));

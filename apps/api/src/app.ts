@@ -1,4 +1,5 @@
 import type { AppDatabase } from "@taskmanager/db";
+import type { AiProvider } from "@taskmanager/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -9,14 +10,17 @@ import {
   eventBus as defaultEventBus,
   type RealtimeEventBus,
 } from "./realtime/event-bus.js";
+import { aiRoutes } from "./routes/ai.js";
+import { analyticsRoutes } from "./routes/analytics.js";
 import { authRoutes } from "./routes/auth.js";
 import { eventRoutes } from "./routes/events.js";
+import { githubRoutes } from "./routes/github.js";
 import { healthRoutes } from "./routes/health.js";
 import { issueRoutes } from "./routes/issues.js";
 import { projectRoutes } from "./routes/projects.js";
 import { sprintRoutes } from "./routes/sprints.js";
 import { workspaceRoutes } from "./routes/workspaces.js";
-import type { AppEnv } from "./types/env.js";
+import type { AppEnv, AppRuntimeConfig } from "./types/env.js";
 
 export interface CreateAppOptions {
   db: AppDatabase;
@@ -27,23 +31,46 @@ export interface CreateAppOptions {
   authBaseUrl?: string;
   githubClientId?: string;
   githubClientSecret?: string;
+  githubWebhookSecret?: string;
+  aiProvider?: AiProvider;
+  geminiApiKey?: string;
+  groqApiKey?: string;
+  openaiApiKey?: string;
+  anthropicApiKey?: string;
+  openrouterApiKey?: string;
+  byokEncryptionKey?: string;
+  upstashRedisRestUrl?: string;
+  upstashRedisRestToken?: string;
   enableLogger?: boolean;
 }
 
 export function createApp(options: CreateAppOptions) {
   const corsOrigin = options.corsOrigin ?? "http://localhost:5173";
+  const authSecret =
+    options.authSecret ?? "dev-only-secret-change-in-production-32-chars";
   const auth =
     options.auth ??
     createAuth(options.db, {
-      secret:
-        options.authSecret ??
-        "dev-only-secret-change-in-production-32-chars",
+      secret: authSecret,
       baseUrl: options.authBaseUrl ?? "http://localhost:8787",
       corsOrigin,
       githubClientId: options.githubClientId,
       githubClientSecret: options.githubClientSecret,
     });
   const bus = options.eventBus ?? defaultEventBus;
+
+  const runtimeConfig: AppRuntimeConfig = {
+    aiProvider: options.aiProvider ?? "gemini",
+    geminiApiKey: options.geminiApiKey,
+    groqApiKey: options.groqApiKey,
+    openaiApiKey: options.openaiApiKey,
+    anthropicApiKey: options.anthropicApiKey,
+    openrouterApiKey: options.openrouterApiKey,
+    byokEncryptionKey: options.byokEncryptionKey || authSecret,
+    githubWebhookSecret: options.githubWebhookSecret,
+    upstashRedisRestUrl: options.upstashRedisRestUrl,
+    upstashRedisRestToken: options.upstashRedisRestToken,
+  };
 
   const app = new Hono<AppEnv>();
 
@@ -65,6 +92,7 @@ export function createApp(options: CreateAppOptions) {
     c.set("db", options.db);
     c.set("auth", auth);
     c.set("eventBus", bus);
+    c.set("config", runtimeConfig);
     await next();
   });
 
@@ -91,6 +119,9 @@ export function createApp(options: CreateAppOptions) {
     .route("/", projectRoutes)
     .route("/", sprintRoutes)
     .route("/", issueRoutes)
+    .route("/", analyticsRoutes)
+    .route("/", aiRoutes)
+    .route("/", githubRoutes)
     .route("/", eventRoutes);
 }
 

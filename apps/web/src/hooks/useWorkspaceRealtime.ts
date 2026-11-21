@@ -80,6 +80,7 @@ export function useWorkspaceRealtime({
         ) {
           void qc.invalidateQueries({ queryKey: queryKeys.issues(projectId) });
           void qc.invalidateQueries({ queryKey: queryKeys.sprints(projectId) });
+          void qc.invalidateQueries({ queryKey: ["analytics", projectId] });
         }
 
         const issueId =

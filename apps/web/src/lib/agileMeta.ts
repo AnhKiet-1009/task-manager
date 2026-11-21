@@ -2,6 +2,7 @@ import type {
   IssuePriority,
   IssueRelationType,
   IssueType,
+  NaturalLanguageFilter,
   SprintStatus,
   WorkflowStateCategory,
   WorkspaceRole,
@@ -183,8 +184,10 @@ export interface IssueFilterValues {
 export function filterIssues(
   issues: IssueListItem[],
   filters: IssueFilterValues,
+  aiFilter?: NaturalLanguageFilter | null,
 ): IssueListItem[] {
   const q = filters.search.trim().toLowerCase();
+  const aiQ = aiFilter?.searchQuery?.trim().toLowerCase() ?? "";
 
   return issues.filter((issue) => {
     if (filters.priority !== "all" && issue.priority !== filters.priority) {
@@ -209,6 +212,52 @@ export function filterIssues(
       const matchDesc = issue.descriptionMd?.toLowerCase().includes(q) ?? false;
       if (!matchId && !matchTitle && !matchDesc) return false;
     }
+
+    if (aiFilter) {
+      if (aiFilter.types && aiFilter.types.length > 0 && !aiFilter.types.includes(issue.type)) {
+        return false;
+      }
+      if (
+        aiFilter.priorities &&
+        aiFilter.priorities.length > 0 &&
+        !aiFilter.priorities.includes(issue.priority)
+      ) {
+        return false;
+      }
+      if (
+        aiFilter.stateCategories &&
+        aiFilter.stateCategories.length > 0 &&
+        (!issue.state || !aiFilter.stateCategories.includes(issue.state.category))
+      ) {
+        return false;
+      }
+      if (aiFilter.unassignedOnly && issue.assigneeId !== null) {
+        return false;
+      }
+      if (aiFilter.overdueOnly && !isIssueOverdue(issue)) {
+        return false;
+      }
+      if (
+        aiFilter.minStoryPoints !== undefined &&
+        (issue.storyPoints ?? 0) < aiFilter.minStoryPoints
+      ) {
+        return false;
+      }
+      if (
+        aiFilter.maxStoryPoints !== undefined &&
+        (issue.storyPoints ?? 0) > aiFilter.maxStoryPoints
+      ) {
+        return false;
+      }
+      if (aiQ) {
+        const matchAiId = issue.identifier.toLowerCase().includes(aiQ);
+        const matchAiTitle = issue.title.toLowerCase().includes(aiQ);
+        const matchAiDesc =
+          issue.descriptionMd?.toLowerCase().includes(aiQ) ?? false;
+        if (!matchAiId && !matchAiTitle && !matchAiDesc) return false;
+      }
+    }
+
     return true;
   });
 }

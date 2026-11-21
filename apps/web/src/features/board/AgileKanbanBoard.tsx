@@ -46,6 +46,7 @@ export function AgileKanbanBoard({
 }: AgileKanbanBoardProps) {
   const boardSprintId = useUiStore((s) => s.boardSprintId);
   const filters = useUiStore((s) => s.filters);
+  const aiFilter = useUiStore((s) => s.aiFilter);
   const openCreateIssueModal = useUiStore((s) => s.openCreateIssueModal);
   const openEditIssueModal = useUiStore((s) => s.openEditIssueModal);
   const openWorkflowStateModal = useUiStore((s) => s.openWorkflowStateModal);
@@ -83,8 +84,8 @@ export function AgileKanbanBoard({
     const bySprint = selectedSprint
       ? nonEpics.filter((i) => i.sprintId === selectedSprint.id)
       : nonEpics;
-    return sortByLexoRank(filterIssues(bySprint, filters));
-  }, [issues, selectedSprint, filters]);
+    return sortByLexoRank(filterIssues(bySprint, filters, aiFilter));
+  }, [issues, selectedSprint, filters, aiFilter]);
 
   const issuesByState = useMemo(() => {
     const map = new Map<string, IssueListItem[]>();

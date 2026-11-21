@@ -203,6 +203,46 @@ export const aiSprintRiskReportSchema = z.object({
   recommendations: z.array(z.string()).min(1),
 });
 
+export const AI_PROVIDERS = [
+  "gemini",
+  "groq",
+  "openai",
+  "anthropic",
+  "openrouter",
+] as const;
+export type AiProvider = (typeof AI_PROVIDERS)[number];
+
+export const aiCommitBreakdownSchema = z.object({
+  projectId: z.string().uuid(),
+  sprintId: z.string().uuid().nullable().optional(),
+  epic: aiBreakdownResponseSchema.shape.epic,
+  issues: z.array(aiGeneratedIssueSchema).min(1).max(25),
+});
+
+export const aiNaturalLanguageFilterRequestSchema = z.object({
+  projectId: z.string().uuid(),
+  query: z.string().trim().min(2).max(500),
+});
+
+export const aiSprintRiskRequestSchema = z.object({
+  projectId: z.string().uuid(),
+  sprintId: z.string().uuid(),
+});
+
+export const workspaceAiSettingsSchema = z.object({
+  provider: z.enum(AI_PROVIDERS),
+  model: z.string().trim().max(80).optional(),
+  apiKey: z.string().trim().min(8).max(300).optional(),
+  clearKey: z.boolean().optional(),
+});
+
+export const simulateGitHubPrSchema = z.object({
+  issueIdentifier: z.string().trim().min(2).max(24),
+  action: z.enum(["opened", "ready_for_review", "merged", "closed"]),
+  prNumber: z.number().int().min(1).max(999_999).optional(),
+  prTitle: z.string().trim().min(3).max(200).optional(),
+});
+
 // ==============================================
 // Realtime Event Stream Schema
 // ==============================================
@@ -242,6 +282,13 @@ export type UpdateIssueInput = z.infer<typeof updateIssueSchema>;
 export type MoveIssueInput = z.infer<typeof moveIssueSchema>;
 export type AIBreakdownRequest = z.infer<typeof aiBreakdownRequestSchema>;
 export type AIBreakdownResponse = z.infer<typeof aiBreakdownResponseSchema>;
+export type AICommitBreakdownInput = z.infer<typeof aiCommitBreakdownSchema>;
+export type AINaturalLanguageFilterRequest = z.infer<
+  typeof aiNaturalLanguageFilterRequestSchema
+>;
+export type AISprintRiskRequest = z.infer<typeof aiSprintRiskRequestSchema>;
+export type WorkspaceAiSettingsInput = z.infer<typeof workspaceAiSettingsSchema>;
+export type SimulateGitHubPrInput = z.infer<typeof simulateGitHubPrSchema>;
 export type NaturalLanguageFilter = z.infer<typeof naturalLanguageFilterSchema>;
 export type AISprintRiskReport = z.infer<typeof aiSprintRiskReportSchema>;
 export type RealtimeEvent = z.infer<typeof realtimeEventSchema>;

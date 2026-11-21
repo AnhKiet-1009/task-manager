@@ -76,7 +76,7 @@ pnpm test        # Chạy toàn bộ Vitest suite (web, api, shared)
 - [x] **Giai đoạn 1**: Tích hợp Better Auth (GitHub OAuth + Email + RBAC 4 vai trò), 1-Click Demo Sandbox Workspace (PGlite zero-Docker dev & Neon Edge), và trọn bộ CRUD APIs (Workspaces, Projects, Workflow States, Sprints, Issues với LexoRank O(1) & WIP Warning).
 - [x] **Giai đoạn 2**: Nâng cấp Frontend sang Core Agile Suite (`@dnd-kit` + LexoRank O(1), cảnh báo WIP Limit, Backlog & Sprint Planning, Epics Roadmap, Optimistic UI + IndexedDB persist, Zustand, Auth + 1-Click Sandbox, Command Palette `Ctrl+K`).
 - [x] **Giai đoạn 3**: Issue Detail Drawer chuyên sâu (Tiptap v3 Rich Text Markdown, Sub-issues inline, Issue Relations, Comments kèm `@mention` autocomplete & RBAC delete, Activity Log Timeline) + Realtime SSE đồng bộ đa tab với trạng thái `Live`.
-- [ ] **Giai đoạn 4**: 3 Trụ cột AI Copilot (PRD-to-Backlog, AI Sprint Risk Radar, Natural Language Filter) + Sprint Analytics (Burndown/Velocity) + GitHub Smart PR Webhook.
+- [x] **Giai đoạn 4**: 3 Trụ cột AI Copilot bằng Vercel AI SDK v7 + Zod Structured Output & Smart Fallback (PRD-to-Backlog tạo hàng loạt Epic/Issues/Relations, AI Sprint Risk & Bottleneck Radar, Natural Language Filter), Sprint Analytics (Recharts Burndown, Velocity, Workload), Kho mã hóa BYOK AES-256-GCM (Web Crypto) kèm Rate-limit 15 lượt/ngày, và GitHub Smart PR Webhook (xác thực HMAC-SHA256 + PR Simulator).
 - [ ] **Giai đoạn 5**: E2E Testing (Playwright), triển khai Live (\$0 trên Cloudflare + Neon + Upstash) & Case Study kỹ thuật.
 
 ---

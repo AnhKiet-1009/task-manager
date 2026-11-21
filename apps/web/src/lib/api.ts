@@ -1,4 +1,11 @@
 import type {
+  AIBreakdownRequest,
+  AIBreakdownResponse,
+  AICommitBreakdownInput,
+  AINaturalLanguageFilterRequest,
+  AiProvider,
+  AISprintRiskReport,
+  AISprintRiskRequest,
   CompleteSprintInput,
   CreateIssueInput,
   CreateProjectInput,
@@ -12,11 +19,14 @@ import type {
   IssueRelationType,
   IssueType,
   MoveIssueInput,
+  NaturalLanguageFilter,
+  SimulateGitHubPrInput,
   SprintStatus,
   UpdateIssueInput,
   UpdateSprintInput,
   UpdateWorkflowStateInput,
   WorkflowStateCategory,
+  WorkspaceAiSettingsInput,
   WorkspaceRole,
 } from "@taskmanager/shared";
 
@@ -304,6 +314,119 @@ export interface MoveIssueResponse {
   } | null;
 }
 
+export interface BurndownPointDto {
+  date: string;
+  label: string;
+  idealPoints: number;
+  remainingPoints: number | null;
+  completedPoints: number | null;
+}
+
+export interface VelocityItemDto {
+  sprintId: string;
+  name: string;
+  status: SprintStatus;
+  plannedPoints: number;
+  completedPoints: number;
+  totalIssues: number;
+  completedIssues: number;
+}
+
+export interface WorkloadItemDto {
+  assigneeId: string | null;
+  assigneeName: string;
+  totalIssues: number;
+  inProgressIssues: number;
+  totalPoints: number;
+  completedPoints: number;
+  overdueCount: number;
+}
+
+export interface StalledIssueDto {
+  id: string;
+  identifier: string;
+  title: string;
+  stateName: string;
+  assigneeName: string | null;
+  storyPoints: number | null;
+  hoursStalled: number;
+  dueDate: string | null;
+  isOverdue: boolean;
+}
+
+export interface ProjectAnalyticsDto {
+  projectId: string;
+  selectedSprint: {
+    id: string;
+    name: string;
+    goal: string | null;
+    status: SprintStatus;
+    startDate: string | null;
+    endDate: string | null;
+    daysTotal: number;
+    daysElapsed: number;
+    daysRemaining: number;
+  } | null;
+  summary: {
+    totalIssues: number;
+    completedIssues: number;
+    totalPoints: number;
+    completedPoints: number;
+    remainingPoints: number;
+    completionPercent: number;
+    averageVelocity: number;
+    stalledCount: number;
+    overdueCount: number;
+    unassignedHighPriorityCount: number;
+    wipBreachCount: number;
+  };
+  burndown: BurndownPointDto[];
+  velocity: VelocityItemDto[];
+  workload: WorkloadItemDto[];
+  stalledIssues: StalledIssueDto[];
+  wipBreaches: Array<{
+    stateId: string;
+    stateName: string;
+    wipLimit: number;
+    currentCount: number;
+  }>;
+}
+
+export interface AiInvocationMetaDto {
+  mode: "llm" | "smart_fallback";
+  provider: string;
+  model: string;
+  usedByok: boolean;
+  quotaRemaining: number | null;
+  fallbackReason?: string;
+}
+
+export interface AiSettingsDto {
+  provider: AiProvider;
+  model: string;
+  hasByokKey: boolean;
+  quota: {
+    allowed: boolean;
+    used: number;
+    limit: number;
+    remaining: number;
+  };
+}
+
+export interface SimulatePrResponseDto {
+  simulated: boolean;
+  prNumber: string;
+  status: ExternalLinkStatus;
+  matchedIdentifiers: string[];
+  updatedIssues: Array<{
+    id: string;
+    identifier: string;
+    previousStateName: string | null;
+    nextStateName: string | null;
+    transitioned: boolean;
+  }>;
+}
+
 // ==============================================
 // API Client Methods
 // ==============================================
@@ -465,5 +588,60 @@ export const api = {
     request<{ deleted: boolean; id: string }>(
       `/api/v1/issue-relations/${relationId}`,
       { method: "DELETE" },
+    ),
+
+  // Sprint Analytics
+  getProjectAnalytics: (projectId: string, sprintId?: string | null) => {
+    const qs = sprintId ? `?sprintId=${encodeURIComponent(sprintId)}` : "";
+    return request<{ analytics: ProjectAnalyticsDto }>(
+      `/api/v1/projects/${projectId}/analytics${qs}`,
+    );
+  },
+
+  // AI Copilot & BYOK Settings
+  getAiSettings: (workspaceId: string) =>
+    request<{ settings: AiSettingsDto }>(
+      `/api/v1/workspaces/${workspaceId}/ai/settings`,
+    ),
+
+  updateAiSettings: (workspaceId: string, input: WorkspaceAiSettingsInput) =>
+    request<{ settings: AiSettingsDto }>(
+      `/api/v1/workspaces/${workspaceId}/ai/settings`,
+      { method: "PUT", body: JSON.stringify(input) },
+    ),
+
+  generatePrdBreakdown: (input: AIBreakdownRequest) =>
+    request<{ breakdown: AIBreakdownResponse; meta: AiInvocationMetaDto }>(
+      "/api/v1/ai/prd-breakdown",
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+
+  commitPrdBreakdown: (input: AICommitBreakdownInput) =>
+    request<{
+      epic: { id: string; identifier: string; title: string };
+      issues: Array<{ id: string; identifier: string; title: string }>;
+      relationsCreated: number;
+    }>("/api/v1/ai/prd-breakdown/commit", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  analyzeSprintRisk: (input: AISprintRiskRequest) =>
+    request<{ report: AISprintRiskReport; meta: AiInvocationMetaDto }>(
+      "/api/v1/ai/sprint-risk",
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+
+  parseNaturalLanguageFilter: (input: AINaturalLanguageFilterRequest) =>
+    request<{ filter: NaturalLanguageFilter; meta: AiInvocationMetaDto }>(
+      "/api/v1/ai/nl-filter",
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+
+  // GitHub Smart PR Simulator
+  simulateGitHubPr: (projectId: string, input: SimulateGitHubPrInput) =>
+    request<SimulatePrResponseDto>(
+      `/api/v1/projects/${projectId}/github/simulate-pr`,
+      { method: "POST", body: JSON.stringify(input) },
     ),
 };

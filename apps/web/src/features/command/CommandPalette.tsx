@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { hasMinimumRole, type WorkspaceRole } from "@taskmanager/shared";
 import {
+  BarChart3,
   Kanban,
+  KeyRound,
   Layers,
   Moon,
   Plus,
   Search,
+  Sparkles,
   Sun,
   Target,
 } from "lucide-react";
@@ -39,6 +42,8 @@ function CommandPaletteDialog({
   const openWorkspaceProjectModal = useUiStore(
     (s) => s.openWorkspaceProjectModal,
   );
+  const setPrdModalOpen = useUiStore((s) => s.setPrdModalOpen);
+  const setAiSettingsModalOpen = useUiStore((s) => s.setAiSettingsModalOpen);
   const { theme, toggleTheme } = useTheme();
 
   const [query, setQuery] = useState("");
@@ -76,6 +81,21 @@ function CommandPaletteDialog({
         onSelect: () => setActiveView("epics"),
       },
       {
+        id: "nav-analytics",
+        group: "Chuyển màn hình",
+        label: "Mở Sprint Analytics & AI Risk Radar",
+        hint: "AI",
+        icon: BarChart3,
+        onSelect: () => setActiveView("analytics"),
+      },
+      {
+        id: "act-ai-settings",
+        group: "Hành động nhanh",
+        label: "Cấu hình AI Copilot & BYOK",
+        icon: KeyRound,
+        onSelect: () => setAiSettingsModalOpen(true),
+      },
+      {
         id: "act-theme",
         group: "Hành động nhanh",
         label:
@@ -89,6 +109,14 @@ function CommandPaletteDialog({
 
     if (canWrite) {
       base.unshift(
+        {
+          id: "act-ai-prd",
+          group: "Hành động nhanh",
+          label: "AI Tạo Backlog từ PRD",
+          hint: "AI",
+          icon: Sparkles,
+          onSelect: () => setPrdModalOpen(true),
+        },
         {
           id: "act-create-issue",
           group: "Hành động nhanh",
@@ -150,6 +178,8 @@ function CommandPaletteDialog({
     openEditIssueModal,
     openSprintModal,
     openWorkspaceProjectModal,
+    setPrdModalOpen,
+    setAiSettingsModalOpen,
   ]);
 
   const safeIndex = Math.min(selectedIndex, Math.max(0, items.length - 1));

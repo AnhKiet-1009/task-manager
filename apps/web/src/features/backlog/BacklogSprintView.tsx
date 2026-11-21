@@ -41,6 +41,7 @@ export function BacklogSprintView({
   issues,
 }: BacklogSprintViewProps) {
   const filters = useUiStore((s) => s.filters);
+  const aiFilter = useUiStore((s) => s.aiFilter);
   const openCreateIssueModal = useUiStore((s) => s.openCreateIssueModal);
   const openEditIssueModal = useUiStore((s) => s.openEditIssueModal);
   const openSprintModal = useUiStore((s) => s.openSprintModal);
@@ -60,9 +61,10 @@ export function BacklogSprintView({
         filterIssues(
           issues.filter((i) => i.type !== "epic"),
           filters,
+          aiFilter,
         ),
       ),
-    [issues, filters],
+    [issues, filters, aiFilter],
   );
 
   const activeSprints = useMemo(

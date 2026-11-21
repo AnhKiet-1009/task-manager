@@ -7,6 +7,11 @@ import {
 import { createPgliteDb } from "@taskmanager/db/pglite";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
+import {
+  decryptSecret,
+  encryptSecret,
+  signGitHubWebhookPayload,
+} from "../lib/crypto.js";
 import { InMemoryEventBus } from "../realtime/event-bus.js";
 
 function extractCookieHeader(res: Response): string {
@@ -38,6 +43,8 @@ describe("Phase 1 API Integration (Real PostgreSQL via PGlite)", () => {
       authBaseUrl: "http://localhost:8787",
       corsOrigin: "http://localhost:5173",
       authSecret: "test-secret-key-for-vitest-at-least-32-chars",
+      byokEncryptionKey: "test-byok-master-key-at-least-32-chars",
+      githubWebhookSecret: "test-github-webhook-secret",
     });
   });
 
@@ -624,5 +631,266 @@ describe("Phase 1 API Integration (Real PostgreSQL via PGlite)", () => {
     expect(chunkText).toContain("event: connected");
     expect(chunkText).toContain(workspace.id);
     await reader.cancel();
+  });
+
+  it("supports Sprint Analytics, AES-256-GCM BYOK Vault, all 3 AI Copilot pillars, and HMAC-verified GitHub PR Automation", async () => {
+    // 1. Verify AES-256-GCM encryption round-trip directly
+    const cipher = await encryptSecret("sk-test-byok-secret-123456", "master-key");
+    expect(cipher.encryptedApiKey).not.toContain("sk-test");
+    const decrypted = await decryptSecret(cipher, "master-key");
+    expect(decrypted).toBe("sk-test-byok-secret-123456");
+
+    // 2. Launch a fresh Sandbox workspace (has ENG, Sprint 13/14/15, 2 stalled issues ENG-13 & ENG-14)
+    const sbRes = await app.request("/api/v1/sandbox", { method: "POST" });
+    expect(sbRes.status).toBe(201);
+    const cookie = extractCookieHeader(sbRes);
+    const sb = (await sbRes.json()) as {
+      workspace: { id: string };
+      project: { id: string; key: string };
+      activeSprint: { id: string };
+    };
+
+    // 3. Sprint Analytics (Burndown, Velocity, Workload, Stalled Issues)
+    const analyticsRes = await app.request(
+      `/api/v1/projects/${sb.project.id}/analytics?sprintId=${sb.activeSprint.id}`,
+      { headers: { Cookie: cookie } },
+    );
+    expect(analyticsRes.status).toBe(200);
+    const { analytics } = (await analyticsRes.json()) as {
+      analytics: {
+        burndown: Array<{ date: string; idealPoints: number }>;
+        velocity: Array<{ name: string; completedPoints: number }>;
+        workload: unknown[];
+        stalledIssues: Array<{ identifier: string }>;
+        summary: { averageVelocity: number; stalledCount: number };
+      };
+    };
+    expect(analytics.burndown.length).toBeGreaterThanOrEqual(10);
+    expect(analytics.velocity).toHaveLength(3);
+    expect(analytics.summary.averageVelocity).toBe(26);
+    expect(analytics.stalledIssues.map((s) => s.identifier)).toEqual(
+      expect.arrayContaining(["ENG-13", "ENG-14"]),
+    );
+
+    // 4. Workspace BYOK Settings (encrypts key, never returns plaintext, supports clear)
+    const putByok = await app.request(
+      `/api/v1/workspaces/${sb.workspace.id}/ai/settings`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+        body: JSON.stringify({
+          provider: "gemini",
+          model: "gemini-2.5-flash",
+          apiKey: "AIzaSyFakeDemoKey123456789",
+        }),
+      },
+    );
+    expect(putByok.status).toBe(200);
+    const byokSaved = (await putByok.json()) as {
+      settings: { hasByokKey: boolean; provider: string };
+    };
+    expect(byokSaved.settings.hasByokKey).toBe(true);
+    expect(JSON.stringify(byokSaved)).not.toContain("AIzaSyFakeDemoKey");
+
+    // Clear BYOK so subsequent AI tests cleanly exercise deterministic Smart Fallback
+    const clearByok = await app.request(
+      `/api/v1/workspaces/${sb.workspace.id}/ai/settings`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+        body: JSON.stringify({ provider: "gemini", clearKey: true }),
+      },
+    );
+    expect(clearByok.status).toBe(200);
+    const cleared = (await clearByok.json()) as {
+      settings: { hasByokKey: boolean };
+    };
+    expect(cleared.settings.hasByokKey).toBe(false);
+
+    // 5. AI Pillar 1: PRD-to-Backlog generate + atomic commit into PostgreSQL
+    const prdRes = await app.request("/api/v1/ai/prd-breakdown", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({
+        projectId: sb.project.id,
+        sprintId: sb.activeSprint.id,
+        prompt: [
+          "Xây dựng hệ thống Thông báo Realtime đa kênh",
+          "- Thiết kế bảng notifications & API đánh dấu đã đọc",
+          "- Gửi thông báo realtime qua SSE khi có @mention",
+          "- Xây dựng chuông thông báo trên TopBar",
+          "- Viết integration test bảo mật multi-tenant",
+        ].join("\n"),
+        maxIssues: 6,
+      }),
+    });
+    expect(prdRes.status).toBe(200);
+    const { breakdown } = (await prdRes.json()) as {
+      breakdown: {
+        epic: { title: string; descriptionMd: string; priority: string };
+        issues: Array<{
+          tempId: string;
+          title: string;
+          descriptionMd: string;
+          type: string;
+          priority: string;
+          storyPoints: number;
+          blockedByTempIds: string[];
+        }>;
+      };
+    };
+    expect(breakdown.issues.length).toBeGreaterThanOrEqual(3);
+
+    const commitRes = await app.request("/api/v1/ai/prd-breakdown/commit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({
+        projectId: sb.project.id,
+        sprintId: sb.activeSprint.id,
+        epic: breakdown.epic,
+        issues: breakdown.issues,
+      }),
+    });
+    expect(commitRes.status).toBe(201);
+    const committed = (await commitRes.json()) as {
+      epic: { identifier: string };
+      issues: Array<{ identifier: string }>;
+      relationsCreated: number;
+    };
+    expect(committed.epic.identifier).toBe("ENG-19");
+    expect(committed.issues[0]?.identifier).toBe("ENG-20");
+    expect(committed.relationsCreated).toBeGreaterThanOrEqual(1);
+
+    // 6. AI Pillar 2: AI Sprint Risk & Bottleneck Radar
+    const riskRes = await app.request("/api/v1/ai/sprint-risk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({
+        projectId: sb.project.id,
+        sprintId: sb.activeSprint.id,
+      }),
+    });
+    expect(riskRes.status).toBe(200);
+    const { report } = (await riskRes.json()) as {
+      report: {
+        riskLevel: string;
+        riskScore: number;
+        stalledIssueIdentifiers: string[];
+        recommendations: string[];
+      };
+    };
+    expect(report.riskScore).toBeGreaterThan(20);
+    expect(report.stalledIssueIdentifiers).toEqual(
+      expect.arrayContaining(["ENG-13", "ENG-14"]),
+    );
+    expect(report.recommendations.length).toBeGreaterThanOrEqual(1);
+
+    // 7. AI Pillar 3: Natural Language Filter (Vietnamese -> structured AST)
+    const nlRes = await app.request("/api/v1/ai/nl-filter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({
+        projectId: sb.project.id,
+        query: "bug ưu tiên cao chưa có người làm quá hạn",
+      }),
+    });
+    expect(nlRes.status).toBe(200);
+    const { filter } = (await nlRes.json()) as {
+      filter: {
+        types?: string[];
+        priorities?: string[];
+        unassignedOnly?: boolean;
+        overdueOnly?: boolean;
+        explanation: string;
+      };
+    };
+    expect(filter.types).toContain("bug");
+    expect(filter.priorities).toContain("high");
+    expect(filter.unassignedOnly).toBe(true);
+    expect(filter.overdueOnly).toBe(true);
+
+    // 8. GitHub Smart PR Webhook (HMAC-SHA256 verification + auto-transition ENG-16 -> In Review -> Done)
+    const rawPrOpenBody = JSON.stringify({
+      action: "opened",
+      repository: { full_name: "acme-corp/core-platform" },
+      pull_request: {
+        number: 777,
+        title: "feat(ai): implement ENG-16 natural language filter",
+        body: "Working on ENG-16",
+        html_url: "https://github.com/acme-corp/core-platform/pull/777",
+        state: "open",
+        draft: false,
+        merged: false,
+        head: { ref: "feat/eng-16-nl-filter" },
+      },
+    });
+
+    // Invalid signature must be rejected with 401
+    const badSigRes = await app.request("/api/v1/webhooks/github", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-GitHub-Event": "pull_request",
+        "X-Hub-Signature-256": "sha256=deadbeef",
+      },
+      body: rawPrOpenBody,
+    });
+    expect(badSigRes.status).toBe(401);
+
+    // Valid HMAC-SHA256 signature links PR #777 and moves ENG-16 to In Review
+    const ghSpy = vi.fn();
+    const unsubGh = bus.subscribe(sb.workspace.id, ghSpy);
+
+    const validOpenSig = await signGitHubWebhookPayload(
+      rawPrOpenBody,
+      "test-github-webhook-secret",
+    );
+    const openRes = await app.request("/api/v1/webhooks/github", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-GitHub-Event": "pull_request",
+        "X-Hub-Signature-256": validOpenSig,
+      },
+      body: rawPrOpenBody,
+    });
+    expect(openRes.status).toBe(200);
+    expect(ghSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "github.pr_synced",
+        payload: expect.objectContaining({
+          identifier: "ENG-16",
+          nextStateName: "In Review",
+        }),
+      }),
+    );
+
+    // Simulate Merge PR via interactive simulator -> transitions ENG-16 to Done!
+    const simMergeRes = await app.request(
+      `/api/v1/projects/${sb.project.id}/github/simulate-pr`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+        body: JSON.stringify({
+          issueIdentifier: "ENG-16",
+          action: "merged",
+          prNumber: 777,
+        }),
+      },
+    );
+    expect(simMergeRes.status).toBe(200);
+    const simMerge = (await simMergeRes.json()) as {
+      updatedIssues: Array<{
+        identifier: string;
+        nextStateName: string;
+        transitioned: boolean;
+      }>;
+    };
+    expect(simMerge.updatedIssues[0]).toMatchObject({
+      identifier: "ENG-16",
+      nextStateName: "Done",
+      transitioned: true,
+    });
+    unsubGh();
   });
 });

@@ -15,6 +15,9 @@ export const queryKeys = {
   sprints: (projectId: string) => ["sprints", projectId] as const,
   issues: (projectId: string) => ["issues", projectId] as const,
   issue: (issueId: string) => ["issue", issueId] as const,
+  analytics: (projectId: string, sprintId?: string | null) =>
+    ["analytics", projectId, sprintId ?? "auto"] as const,
+  aiSettings: (workspaceId: string) => ["ai-settings", workspaceId] as const,
 };
 
 export function createQueryClient() {

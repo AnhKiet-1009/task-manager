@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { createNodeDb } from "@taskmanager/db/node";
 import { createPgliteDb } from "@taskmanager/db/pglite";
+import type { AiProvider } from "@taskmanager/shared";
 import { createApp } from "./app.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,6 +43,16 @@ async function bootstrap() {
     authSecret,
     githubClientId: process.env.GITHUB_CLIENT_ID || undefined,
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || undefined,
+    githubWebhookSecret: process.env.GITHUB_WEBHOOK_SECRET || undefined,
+    aiProvider: (process.env.AI_PROVIDER as AiProvider | undefined) ?? "gemini",
+    geminiApiKey: process.env.GEMINI_API_KEY || undefined,
+    groqApiKey: process.env.GROQ_API_KEY || undefined,
+    openaiApiKey: process.env.OPENAI_API_KEY || undefined,
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || undefined,
+    openrouterApiKey: process.env.OPENROUTER_API_KEY || undefined,
+    byokEncryptionKey: process.env.BYOK_ENCRYPTION_KEY || undefined,
+    upstashRedisRestUrl: process.env.UPSTASH_REDIS_REST_URL || undefined,
+    upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN || undefined,
   });
 
   serve(
