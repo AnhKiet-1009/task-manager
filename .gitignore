@@ -17,6 +17,11 @@ dist-ssr
 coverage
 *.tsbuildinfo
 
+# Playwright E2E artifacts
+playwright-report
+test-results
+blob-report
+
 # Environment variables
 .env
 .env.*

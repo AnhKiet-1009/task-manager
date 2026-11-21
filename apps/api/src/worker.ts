@@ -1,4 +1,4 @@
-import { createEdgeDb } from "@taskmanager/db";
+import { cleanupExpiredSandboxes, createEdgeDb } from "@taskmanager/db";
 import type { AiProvider } from "@taskmanager/shared";
 import { createApp } from "./app.js";
 
@@ -22,8 +22,8 @@ export interface WorkerEnv {
 }
 
 /**
- * Cloudflare Workers Free Tier entrypoint (0ms cold start).
- * Creates an edge Neon Serverless DB handle per request safely.
+ * Cloudflare Workers Free Tier entrypoint (0ms cold start) with scheduled 24h
+ * Sandbox cleanup cron trigger so free-tier Neon storage stays lean.
  */
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
@@ -48,6 +48,19 @@ export default {
         upstashRedisRestToken: env.UPSTASH_REDIS_REST_TOKEN,
       });
       return await app.fetch(request);
+    } finally {
+      await pool.end();
+    }
+  },
+
+  async scheduled(
+    _controller: { cron: string; scheduledTime: number },
+    env: WorkerEnv,
+  ): Promise<void> {
+    const { db, pool } = createEdgeDb(env.DATABASE_URL);
+    try {
+      const removed = await cleanupExpiredSandboxes(db);
+      console.log(`[Cron] Cleaned up ${removed} expired sandbox workspace(s)`);
     } finally {
       await pool.end();
     }

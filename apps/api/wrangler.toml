@@ -6,3 +6,17 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 NODE_ENV = "production"
 AI_PROVIDER = "gemini"
+
+# Automatically purge expired 24h Demo Sandbox workspaces every 6 hours
+[triggers]
+crons = ["0 */6 * * *"]
+
+# Set sensitive credentials via `wrangler secret put <NAME>`:
+# - DATABASE_URL
+# - BETTER_AUTH_SECRET
+# - BETTER_AUTH_URL
+# - CORS_ORIGIN
+# - BYOK_ENCRYPTION_KEY
+# - GEMINI_API_KEY / GROQ_API_KEY (optional free-tier server LLM key)
+# - GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET / GITHUB_WEBHOOK_SECRET (optional)
+# - UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN (optional)

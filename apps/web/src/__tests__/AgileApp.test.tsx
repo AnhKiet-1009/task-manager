@@ -990,7 +990,11 @@ describe("Phase 2 Core Agile Engine UI", () => {
     const card = await screen.findByTestId("issue-card-ENG-12");
     await user.click(card);
 
-    const drawer = await screen.findByRole("dialog", { name: /ENG-12/i });
+    const drawer = await screen.findByRole(
+      "dialog",
+      { name: /ENG-12/i },
+      { timeout: 5000 },
+    );
     expect(within(drawer).getByText("ENG-1")).toBeInTheDocument();
 
     // Tiptap editor displays the issue description
@@ -1160,9 +1164,13 @@ describe("Phase 2 Core Agile Engine UI", () => {
       screen.getByRole("button", { name: /analytics & ai radar/i }),
     );
     expect(
-      await screen.findByRole("heading", {
-        name: /sprint analytics & ai risk radar/i,
-      }),
+      await screen.findByRole(
+        "heading",
+        {
+          name: /sprint analytics & ai risk radar/i,
+        },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument();
     expect(
       await screen.findByText(/sprint burndown chart/i),

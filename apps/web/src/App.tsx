@@ -12,7 +12,6 @@ import { AgileKanbanBoard } from "./features/board/AgileKanbanBoard";
 import { WorkflowStateModal } from "./features/board/WorkflowStateModal";
 import { CommandPalette } from "./features/command/CommandPalette";
 import { EpicsView } from "./features/epics/EpicsView";
-import { IssueDetailDrawer } from "./features/issues/IssueDetailDrawer";
 import { IssueModal } from "./features/issues/IssueModal";
 import { Sidebar } from "./features/layout/Sidebar";
 import { TopBar } from "./features/layout/TopBar";
@@ -37,11 +36,18 @@ const AnalyticsDashboard = lazy(() =>
   })),
 );
 
+const IssueDetailDrawer = lazy(() =>
+  import("./features/issues/IssueDetailDrawer").then((m) => ({
+    default: m.IssueDetailDrawer,
+  })),
+);
+
 function AgileWorkspaceShell({ me }: { me: MeResponse }) {
   const activeWorkspaceId = useUiStore((s) => s.activeWorkspaceId);
   const activeProjectId = useUiStore((s) => s.activeProjectId);
   const activeView = useUiStore((s) => s.activeView);
   const boardSprintId = useUiStore((s) => s.boardSprintId);
+  const issueDrawerId = useUiStore((s) => s.issueDrawerId);
   const setActiveWorkspaceId = useUiStore((s) => s.setActiveWorkspaceId);
   const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
   const setBoardSprintId = useUiStore((s) => s.setBoardSprintId);
@@ -220,16 +226,20 @@ function AgileWorkspaceShell({ me }: { me: MeResponse }) {
       </div>
 
       {/* Global Modals, Deep Issue Drawer & Command Palette */}
-      <IssueDetailDrawer
-        projectId={resolvedProjectId}
-        role={role}
-        currentUserId={me.user.id}
-        workflowStates={workflowStates}
-        sprints={sprints}
-        labels={labels}
-        members={members}
-        allIssues={issues}
-      />
+      {issueDrawerId && (
+        <Suspense fallback={null}>
+          <IssueDetailDrawer
+            projectId={resolvedProjectId}
+            role={role}
+            currentUserId={me.user.id}
+            workflowStates={workflowStates}
+            sprints={sprints}
+            labels={labels}
+            members={members}
+            allIssues={issues}
+          />
+        </Suspense>
+      )}
       <IssueModal
         projectId={resolvedProjectId}
         role={role}

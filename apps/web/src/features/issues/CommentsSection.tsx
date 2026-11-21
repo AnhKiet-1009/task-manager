@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { hasMinimumRole, type WorkspaceRole } from "@taskmanager/shared";
 import { AtSign, Send, Trash2 } from "lucide-react";
@@ -66,6 +66,16 @@ export function CommentsSection({
   const [cursorPos, setCursorPos] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pendingCursorRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (pendingCursorRef.current !== null && inputRef.current) {
+      const pos = pendingCursorRef.current;
+      pendingCursorRef.current = null;
+      inputRef.current.focus();
+      inputRef.current.setSelectionRange(pos, pos);
+    }
+  }, [text]);
 
   const memberNames = useMemo(
     () => members.map((m) => m.user.name),
@@ -108,14 +118,10 @@ export function CommentsSection({
     const nextText = `${prefix}${inserted}${suffix}`;
     const nextCursor = prefix.length + inserted.length;
 
+    pendingCursorRef.current = nextCursor;
     setText(nextText);
     setCursorPos(nextCursor);
     setMentionIndex(0);
-
-    window.setTimeout(() => {
-      inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(nextCursor, nextCursor);
-    }, 0);
   };
 
   const handleSubmit = () => {
@@ -207,6 +213,7 @@ export function CommentsSection({
                     type="button"
                     role="option"
                     aria-selected={selected}
+                    onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setMentionIndex(idx)}
                     onClick={() => insertMention(member.user.name)}
                     className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition cursor-pointer ${

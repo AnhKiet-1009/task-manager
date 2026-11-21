@@ -252,7 +252,7 @@ export function AiSettingsModal({
           </div>
         ) : (
           <AiSettingsModalBody
-            key={`${workspaceId}-${settingsQuery.data.provider}-${String(settingsQuery.data.hasByokKey)}`}
+            key={workspaceId}
             workspaceId={workspaceId}
             role={role}
             settings={settingsQuery.data}

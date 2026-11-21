@@ -399,7 +399,14 @@ describe("Phase 1 API Integration (Real PostgreSQL via PGlite)", () => {
       workspace: { id: string };
     };
 
-    // Force expiration into the past
+    const activeRes = await app.request("/api/v1/sandbox", {
+      method: "POST",
+    });
+    const { workspace: activeWs } = (await activeRes.json()) as {
+      workspace: { id: string };
+    };
+
+    // Force only expiredWs expiration into the past
     await pg.db
       .update(workspaces)
       .set({ sandboxExpiresAt: new Date(Date.now() - 60_000) })
@@ -408,11 +415,41 @@ describe("Phase 1 API Integration (Real PostgreSQL via PGlite)", () => {
     const purged = await cleanupExpiredSandboxes(pg.db);
     expect(purged).toBe(1);
 
-    const remaining = await pg.db
+    const remainingExpired = await pg.db
       .select({ id: workspaces.id })
       .from(workspaces)
       .where(eq(workspaces.id, expiredWs.id));
-    expect(remaining).toHaveLength(0);
+    expect(remainingExpired).toHaveLength(0);
+
+    const remainingActive = await pg.db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.id, activeWs.id));
+    expect(remainingActive).toHaveLength(1);
+  });
+
+  it("supports comma-separated multi-origin CORS with credentials", async () => {
+    const multiOriginApp = createApp({
+      db: pg.db,
+      corsOrigin: "https://app.example.com, https://preview.pages.dev",
+      authBaseUrl: "https://api.example.com",
+      authSecret: "test-secret-for-unit-tests-at-least-32-chars",
+      enableLogger: false,
+    });
+
+    const preflightRes = await multiOriginApp.request("/health", {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://preview.pages.dev",
+        "Access-Control-Request-Method": "GET",
+      },
+    });
+    expect(preflightRes.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://preview.pages.dev",
+    );
+    expect(preflightRes.headers.get("Access-Control-Allow-Credentials")).toBe(
+      "true",
+    );
   });
 
   it("supports comment deletion RBAC, issue relations with realtime broadcast, and SSE workspace stream", async () => {

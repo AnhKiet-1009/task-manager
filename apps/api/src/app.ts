@@ -45,7 +45,10 @@ export interface CreateAppOptions {
 }
 
 export function createApp(options: CreateAppOptions) {
-  const corsOrigin = options.corsOrigin ?? "http://localhost:5173";
+  const allowedOrigins = (options.corsOrigin ?? "http://localhost:5173")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   const authSecret =
     options.authSecret ?? "dev-only-secret-change-in-production-32-chars";
   const auth =
@@ -53,7 +56,7 @@ export function createApp(options: CreateAppOptions) {
     createAuth(options.db, {
       secret: authSecret,
       baseUrl: options.authBaseUrl ?? "http://localhost:8787",
-      corsOrigin,
+      trustedOrigins: allowedOrigins,
       githubClientId: options.githubClientId,
       githubClientSecret: options.githubClientSecret,
     });
@@ -81,7 +84,10 @@ export function createApp(options: CreateAppOptions) {
   app.use(
     "*",
     cors({
-      origin: corsOrigin,
+      origin: (reqOrigin) =>
+        reqOrigin && allowedOrigins.includes(reqOrigin)
+          ? reqOrigin
+          : (allowedOrigins[0] ?? "*"),
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
       credentials: true,

@@ -11,9 +11,24 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 export interface AuthConfig {
   secret: string;
   baseUrl: string;
-  corsOrigin: string;
+  trustedOrigins: string[];
   githubClientId?: string;
   githubClientSecret?: string;
+}
+
+function hasCrossOriginTarget(baseUrl: string, trustedOrigins: string[]): boolean {
+  try {
+    const apiOrigin = new URL(baseUrl).origin;
+    return trustedOrigins.some((origin) => {
+      try {
+        return new URL(origin).origin !== apiOrigin;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
 }
 
 export function createAuth(db: AppDatabase, config: AuthConfig) {
@@ -27,6 +42,10 @@ export function createAuth(db: AppDatabase, config: AuthConfig) {
         }
       : undefined;
 
+  const isHttps = config.baseUrl.startsWith("https://");
+  const isCrossSiteHttps =
+    isHttps && hasCrossOriginTarget(config.baseUrl, config.trustedOrigins);
+
   return betterAuth({
     database: drizzleAdapter(db, {
       provider: "pg",
@@ -39,11 +58,23 @@ export function createAuth(db: AppDatabase, config: AuthConfig) {
     }),
     secret: config.secret,
     baseURL: config.baseUrl,
-    trustedOrigins: [config.corsOrigin],
+    trustedOrigins: config.trustedOrigins,
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
     },
+    ...(isCrossSiteHttps
+      ? {
+          advanced: {
+            useSecureCookies: true,
+            defaultCookieAttributes: {
+              sameSite: "none" as const,
+              secure: true,
+              httpOnly: true,
+            },
+          },
+        }
+      : {}),
     ...(socialProviders ? { socialProviders } : {}),
   });
 }

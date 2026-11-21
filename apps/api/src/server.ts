@@ -22,14 +22,20 @@ const authSecret =
   "dev-only-secret-change-in-production-32-chars";
 
 async function bootstrap() {
+  const useMemoryPglite = process.env.PGLITE_MEMORY === "1";
   const databaseUrl = process.env.DATABASE_URL;
   let db;
 
-  if (databaseUrl) {
+  if (useMemoryPglite) {
+    console.log("[API] Starting isolated in-memory PostgreSQL (PGlite)...");
+    ({ db } = await createPgliteDb());
+  } else if (databaseUrl) {
     console.log("[API] Connecting to PostgreSQL via DATABASE_URL...");
     ({ db } = createNodeDb(databaseUrl));
   } else {
-    const pgliteDir = path.resolve(__dirname, "../../../.pglite-data");
+    const pgliteDir =
+      process.env.PGLITE_DATA_DIR ||
+      path.resolve(__dirname, "../../../.pglite-data");
     console.log(
       `[API] DATABASE_URL not set — starting embedded PostgreSQL (PGlite) at ${pgliteDir}`,
     );
@@ -55,13 +61,17 @@ async function bootstrap() {
     upstashRedisRestToken: process.env.UPSTASH_REDIS_REST_TOKEN || undefined,
   });
 
+  const hostname = process.env.HOST || undefined;
   serve(
     {
       fetch: app.fetch,
       port,
+      ...(hostname ? { hostname } : {}),
     },
     (info) => {
-      console.log(`[API] Server ready at http://localhost:${info.port}`);
+      console.log(
+        `[API] Server ready at http://${hostname ?? "localhost"}:${info.port}`,
+      );
     },
   );
 }
