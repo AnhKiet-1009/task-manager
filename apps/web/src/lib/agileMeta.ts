@@ -1,5 +1,6 @@
 import type {
   IssuePriority,
+  IssueRelationType,
   IssueType,
   SprintStatus,
   WorkflowStateCategory,
@@ -114,6 +115,43 @@ export const ROLE_LABEL: Record<WorkspaceRole, string> = {
   member: "Member",
   viewer: "Viewer",
 };
+
+export const ISSUE_RELATION_LABEL: Record<IssueRelationType, string> = {
+  blocks: "Chặn (Blocks)",
+  blocked_by: "Bị chặn bởi",
+  relates_to: "Liên quan tới",
+  duplicates: "Trùng lặp với",
+};
+
+export const ISSUE_RELATION_INVERSE_LABEL: Record<IssueRelationType, string> = {
+  blocks: "Bị chặn bởi",
+  blocked_by: "Chặn (Blocks)",
+  relates_to: "Liên quan tới",
+  duplicates: "Bị trùng lặp bởi",
+};
+
+export function formatRelativeTimeVN(isoOrTimestamp: string | number): string {
+  const ts =
+    typeof isoOrTimestamp === "number"
+      ? isoOrTimestamp
+      : new Date(isoOrTimestamp).getTime();
+  if (!Number.isFinite(ts)) return "";
+
+  const diffSec = Math.round((Date.now() - ts) / 1000);
+  if (diffSec < 10) return "vừa xong";
+  if (diffSec < 60) return `${diffSec} giây trước`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} phút trước`;
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours} giờ trước`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} ngày trước`;
+
+  return new Date(ts).toLocaleDateString("vi-VN");
+}
 
 export function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);

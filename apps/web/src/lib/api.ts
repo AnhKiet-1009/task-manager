@@ -9,6 +9,7 @@ import type {
   ExternalLinkType,
   ExternalProvider,
   IssuePriority,
+  IssueRelationType,
   IssueType,
   MoveIssueInput,
   SprintStatus,
@@ -21,6 +22,10 @@ import type {
 
 const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
+
+export function getEventsUrl(workspaceId: string): string {
+  return `${API_BASE}/api/v1/workspaces/${workspaceId}/events`;
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -237,6 +242,27 @@ export interface IssueListItem {
   subIssueCount: number;
 }
 
+export interface IssueRelationLinkedIssueDto {
+  id: string;
+  identifier: string;
+  title: string;
+  type: IssueType;
+  stateId: string;
+  priority: IssuePriority;
+}
+
+export interface IssueRelationOutgoingDto {
+  id: string;
+  type: IssueRelationType;
+  targetIssue: IssueRelationLinkedIssueDto;
+}
+
+export interface IssueRelationIncomingDto {
+  id: string;
+  type: IssueRelationType;
+  sourceIssue: IssueRelationLinkedIssueDto;
+}
+
 export interface IssueDetailDto extends IssueListItem {
   sprint: SprintDto | null;
   parent: { id: string; identifier: string; title: string; type: IssueType } | null;
@@ -249,6 +275,10 @@ export interface IssueDetailDto extends IssueListItem {
     stateId: string;
     storyPoints: number | null;
   }>;
+  relations: {
+    outgoing: IssueRelationOutgoingDto[];
+    incoming: IssueRelationIncomingDto[];
+  };
   comments: Array<{
     id: string;
     bodyMd: string;
@@ -414,5 +444,26 @@ export const api = {
     request<{ comment: { id: string; bodyMd: string; createdAt: string } }>(
       `/api/v1/issues/${issueId}/comments`,
       { method: "POST", body: JSON.stringify({ bodyMd }) },
+    ),
+
+  deleteComment: (commentId: string) =>
+    request<{ deleted: boolean; id: string }>(
+      `/api/v1/comments/${commentId}`,
+      { method: "DELETE" },
+    ),
+
+  createIssueRelation: (
+    issueId: string,
+    input: { targetIssueId: string; type: IssueRelationType },
+  ) =>
+    request<{ relation: { id: string } | null }>(
+      `/api/v1/issues/${issueId}/relations`,
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+
+  deleteIssueRelation: (relationId: string) =>
+    request<{ deleted: boolean; id: string }>(
+      `/api/v1/issue-relations/${relationId}`,
+      { method: "DELETE" },
     ),
 };

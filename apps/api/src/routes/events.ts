@@ -11,6 +11,9 @@ export const eventRoutes = new Hono<AppEnv>().get(
     const workspaceId = c.req.param("workspaceId");
     const bus = c.var.eventBus;
 
+    c.header("X-Accel-Buffering", "no");
+    c.header("Cache-Control", "no-cache, no-transform");
+
     return streamSSE(c, async (stream) => {
       await stream.writeSSE({
         event: "connected",
@@ -35,9 +38,15 @@ export const eventRoutes = new Hono<AppEnv>().get(
         });
       }, 25_000);
 
+      const onRawAbort = () => {
+        if (!stream.closed) stream.abort();
+      };
+      c.req.raw.signal?.addEventListener("abort", onRawAbort, { once: true });
+
       stream.onAbort(() => {
         clearInterval(heartbeat);
         unsubscribe();
+        c.req.raw.signal?.removeEventListener("abort", onRawAbort);
       });
 
       await new Promise<void>((resolve) => {

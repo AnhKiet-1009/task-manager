@@ -10,6 +10,7 @@ import { AgileKanbanBoard } from "./features/board/AgileKanbanBoard";
 import { WorkflowStateModal } from "./features/board/WorkflowStateModal";
 import { CommandPalette } from "./features/command/CommandPalette";
 import { EpicsView } from "./features/epics/EpicsView";
+import { IssueDetailDrawer } from "./features/issues/IssueDetailDrawer";
 import { IssueModal } from "./features/issues/IssueModal";
 import { Sidebar } from "./features/layout/Sidebar";
 import { TopBar } from "./features/layout/TopBar";
@@ -23,6 +24,7 @@ import {
   useWorkspace,
 } from "./hooks/useAgileQueries";
 import { useTheme } from "./hooks/useTheme";
+import { useWorkspaceRealtime } from "./hooks/useWorkspaceRealtime";
 import type { MeResponse } from "./lib/api";
 import { createQueryClient } from "./lib/queryClient";
 import { useUiStore } from "./stores/uiStore";
@@ -68,6 +70,12 @@ function AgileWorkspaceShell({ me }: { me: MeResponse }) {
   const projectQuery = useProject(resolvedProjectId);
   const sprintsQuery = useSprints(resolvedProjectId);
   const issuesQuery = useProjectIssues(resolvedProjectId);
+
+  useWorkspaceRealtime({
+    workspaceId: activeWorkspace?.id ?? null,
+    projectId: resolvedProjectId,
+    currentUserId: me.user.id,
+  });
 
   const sprints = useMemo(
     () => sprintsQuery.data ?? projectQuery.data?.sprints ?? [],
@@ -187,7 +195,17 @@ function AgileWorkspaceShell({ me }: { me: MeResponse }) {
         )}
       </div>
 
-      {/* Global Modals & Command Palette */}
+      {/* Global Modals, Deep Issue Drawer & Command Palette */}
+      <IssueDetailDrawer
+        projectId={resolvedProjectId}
+        role={role}
+        currentUserId={me.user.id}
+        workflowStates={workflowStates}
+        sprints={sprints}
+        labels={labels}
+        members={members}
+        allIssues={issues}
+      />
       <IssueModal
         projectId={resolvedProjectId}
         role={role}

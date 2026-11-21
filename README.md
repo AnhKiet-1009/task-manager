@@ -75,7 +75,7 @@ pnpm test        # Chạy toàn bộ Vitest suite (web, api, shared)
 - [x] **Giai đoạn 0**: Chuyển đổi Monorepo (`pnpm` + `Turborepo`), lõi `@taskmanager/shared` (LexoRank, Zod, GitHub parser), toàn bộ Drizzle PostgreSQL Schema (`@taskmanager/db`), khung Hono API + Realtime SSE (`@taskmanager/api`), Docker & CI.
 - [x] **Giai đoạn 1**: Tích hợp Better Auth (GitHub OAuth + Email + RBAC 4 vai trò), 1-Click Demo Sandbox Workspace (PGlite zero-Docker dev & Neon Edge), và trọn bộ CRUD APIs (Workspaces, Projects, Workflow States, Sprints, Issues với LexoRank O(1) & WIP Warning).
 - [x] **Giai đoạn 2**: Nâng cấp Frontend sang Core Agile Suite (`@dnd-kit` + LexoRank O(1), cảnh báo WIP Limit, Backlog & Sprint Planning, Epics Roadmap, Optimistic UI + IndexedDB persist, Zustand, Auth + 1-Click Sandbox, Command Palette `Ctrl+K`).
-- [ ] **Giai đoạn 3**: Issue Detail chuyên sâu (Tiptap Rich Text, Sub-issues, Relations, Comments, Activity Log) + Realtime SSE đồng bộ đa tab.
+- [x] **Giai đoạn 3**: Issue Detail Drawer chuyên sâu (Tiptap v3 Rich Text Markdown, Sub-issues inline, Issue Relations, Comments kèm `@mention` autocomplete & RBAC delete, Activity Log Timeline) + Realtime SSE đồng bộ đa tab với trạng thái `Live`.
 - [ ] **Giai đoạn 4**: 3 Trụ cột AI Copilot (PRD-to-Backlog, AI Sprint Risk Radar, Natural Language Filter) + Sprint Analytics (Burndown/Velocity) + GitHub Smart PR Webhook.
 - [ ] **Giai đoạn 5**: E2E Testing (Playwright), triển khai Live (\$0 trên Cloudflare + Neon + Upstash) & Case Study kỹ thuật.
 

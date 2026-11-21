@@ -27,6 +27,7 @@ export function TopBar({ projectDetail, sprints, role }: TopBarProps) {
   const activeView = useUiStore((s) => s.activeView);
   const boardSprintId = useUiStore((s) => s.boardSprintId);
   const filters = useUiStore((s) => s.filters);
+  const realtimeStatus = useUiStore((s) => s.realtimeStatus);
   const setBoardSprintId = useUiStore((s) => s.setBoardSprintId);
   const setFilters = useUiStore((s) => s.setFilters);
   const resetFilters = useUiStore((s) => s.resetFilters);
@@ -79,6 +80,31 @@ export function TopBar({ projectDetail, sprints, role }: TopBarProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {realtimeStatus !== "idle" && (
+            <span
+              data-testid="realtime-status-pill"
+              title={
+                realtimeStatus === "connected"
+                  ? "Đang đồng bộ Realtime qua SSE"
+                  : "Đang kết nối lại luồng Realtime..."
+              }
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold ${
+                realtimeStatus === "connected"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
+                  : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                  realtimeStatus === "connected"
+                    ? "bg-emerald-500"
+                    : "bg-amber-500"
+                }`}
+              />
+              {realtimeStatus === "connected" ? "Live" : "Đang kết nối..."}
+            </span>
+          )}
+
           <button
             type="button"
             onClick={() => setCommandPaletteOpen(true)}

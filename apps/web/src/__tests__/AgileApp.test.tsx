@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
@@ -239,6 +239,41 @@ function setupMockFetch(options: {
   let authed = options.initialAuth;
   const role = options.role ?? "owner";
   const currentIssues = [...mockIssues];
+  let seq = 18;
+  let relSeq = 1;
+  let commentSeq = 1;
+
+  const outgoingRelationsByIssue = new Map<
+    string,
+    IssueDetailDto["relations"]["outgoing"]
+  >();
+  const commentsByIssue = new Map<string, IssueDetailDto["comments"]>([
+    [
+      "55555555-5555-4555-8555-555555555551",
+      [
+        {
+          id: "c-seed-1",
+          bodyMd: "Đã dựng xong query Activity Logs.",
+          createdAt: "2026-11-15T10:00:00Z",
+          author: { id: "u-2", name: "Minh Anh", email: "minh.anh@acme.local" },
+        },
+      ],
+    ],
+  ]);
+  const activityLogsByIssue = new Map<string, IssueDetailDto["activityLogs"]>([
+    [
+      "55555555-5555-4555-8555-555555555551",
+      [
+        {
+          id: "log-1",
+          action: "state_changed",
+          payload: { toStateName: "In Progress", toCategory: "started" },
+          createdAt: "2026-11-15T09:00:00Z",
+          actor: { id: "u-1", name: "Demo Engineer" },
+        },
+      ],
+    ],
+  ]);
 
   const mePayload = (): MeResponse => ({
     user: { id: "u-1", name: "Demo Engineer", email: "demo@acme.local" },
@@ -268,6 +303,12 @@ function setupMockFetch(options: {
           role,
           createdAt: "2026-11-14T00:00:00Z",
           user: { id: "u-1", name: "Demo Engineer", email: "demo@acme.local" },
+        },
+        {
+          id: "m-2",
+          role: "member",
+          createdAt: "2026-11-14T00:00:00Z",
+          user: { id: "u-2", name: "Minh Anh", email: "minh.anh@acme.local" },
         },
       ],
       projects: [
@@ -349,19 +390,23 @@ function setupMockFetch(options: {
           priority?: IssueListItem["priority"];
           stateId?: string;
           sprintId?: string | null;
+          parentId?: string | null;
         };
+        seq += 1;
         const created: IssueListItem = {
           ...mockIssues[1]!,
-          id: "55555555-5555-4555-8555-555555555599",
-          identifier: "ENG-19",
+          id: `55555555-5555-4555-8555-5555555555${seq}`,
+          identifier: `ENG-${seq}`,
           title: body.title,
+          descriptionMd: null,
           type: body.type ?? "task",
           priority: body.priority ?? "medium",
+          parentId: body.parentId ?? null,
           stateId: body.stateId ?? STATE_TODO_ID,
           state:
             mockStates.find((s) => s.id === (body.stateId ?? STATE_TODO_ID)) ??
             mockStates[0]!,
-          sprintId: body.sprintId ?? SPRINT_ACTIVE_ID,
+          sprintId: body.sprintId !== undefined ? body.sprintId : SPRINT_ACTIVE_ID,
           externalLinks: [],
           labels: [],
         };
@@ -369,17 +414,109 @@ function setupMockFetch(options: {
         return jsonResponse({ issue: created }, 201);
       }
 
+      const relCreateMatch = url.match(/\/api\/v1\/issues\/([^/?]+)\/relations$/);
+      if (relCreateMatch && method === "POST") {
+        const sourceId = relCreateMatch[1]!;
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          targetIssueId: string;
+          type: IssueDetailDto["relations"]["outgoing"][number]["type"];
+        };
+        const target = currentIssues.find((i) => i.id === body.targetIssueId);
+        if (!target) return jsonResponse({ error: { code: "NOT_FOUND" } }, 404);
+        const relId = `rel-${relSeq++}`;
+        const list = outgoingRelationsByIssue.get(sourceId) ?? [];
+        list.push({
+          id: relId,
+          type: body.type,
+          targetIssue: {
+            id: target.id,
+            identifier: target.identifier,
+            title: target.title,
+            type: target.type,
+            stateId: target.stateId,
+            priority: target.priority,
+          },
+        });
+        outgoingRelationsByIssue.set(sourceId, list);
+        return jsonResponse({ relation: { id: relId } }, 201);
+      }
+
+      const relDeleteMatch = url.match(/\/api\/v1\/issue-relations\/([^/?]+)$/);
+      if (relDeleteMatch && method === "DELETE") {
+        const relId = relDeleteMatch[1]!;
+        for (const [k, list] of outgoingRelationsByIssue.entries()) {
+          outgoingRelationsByIssue.set(
+            k,
+            list.filter((r) => r.id !== relId),
+          );
+        }
+        return jsonResponse({ deleted: true, id: relId });
+      }
+
+      const commentCreateMatch = url.match(/\/api\/v1\/issues\/([^/?]+)\/comments$/);
+      if (commentCreateMatch && method === "POST") {
+        const issueId = commentCreateMatch[1]!;
+        const body = JSON.parse(String(init?.body ?? "{}")) as { bodyMd: string };
+        const newComment = {
+          id: `c-${commentSeq++}`,
+          bodyMd: body.bodyMd,
+          createdAt: new Date().toISOString(),
+          author: { id: "u-1", name: "Demo Engineer", email: "demo@acme.local" },
+        };
+        const list = commentsByIssue.get(issueId) ?? [];
+        list.push(newComment);
+        commentsByIssue.set(issueId, list);
+        return jsonResponse({ comment: newComment }, 201);
+      }
+
+      const commentDeleteMatch = url.match(/\/api\/v1\/comments\/([^/?]+)$/);
+      if (commentDeleteMatch && method === "DELETE") {
+        const commentId = commentDeleteMatch[1]!;
+        for (const [k, list] of commentsByIssue.entries()) {
+          commentsByIssue.set(
+            k,
+            list.filter((c) => c.id !== commentId),
+          );
+        }
+        return jsonResponse({ deleted: true, id: commentId });
+      }
+
       const issueDetailMatch = url.match(/\/api\/v1\/issues\/([^/?]+)$/);
       if (issueDetailMatch && method === "GET") {
         const found = currentIssues.find((i) => i.id === issueDetailMatch[1]);
         if (!found) return jsonResponse({ error: { code: "NOT_FOUND" } }, 404);
+        const parent = found.parentId
+          ? currentIssues.find((p) => p.id === found.parentId)
+          : null;
+        const children = currentIssues
+          .filter((c) => c.parentId === found.id)
+          .map((c) => ({
+            id: c.id,
+            identifier: c.identifier,
+            title: c.title,
+            type: c.type,
+            priority: c.priority,
+            stateId: c.stateId,
+            storyPoints: c.storyPoints,
+          }));
         const detail: IssueDetailDto = {
           ...found,
           sprint: mockSprints.find((s) => s.id === found.sprintId) ?? null,
-          parent: null,
-          children: [],
-          comments: [],
-          activityLogs: [],
+          parent: parent
+            ? {
+                id: parent.id,
+                identifier: parent.identifier,
+                title: parent.title,
+                type: parent.type,
+              }
+            : null,
+          children,
+          relations: {
+            outgoing: outgoingRelationsByIssue.get(found.id) ?? [],
+            incoming: [],
+          },
+          comments: [...(commentsByIssue.get(found.id) ?? [])],
+          activityLogs: [...(activityLogsByIssue.get(found.id) ?? [])],
         };
         return jsonResponse({ issue: detail });
       }
@@ -391,12 +528,21 @@ function setupMockFetch(options: {
 }
 
 describe("Phase 2 Core Agile Engine UI", () => {
+  const originalEventSource = (globalThis as { EventSource?: unknown })
+    .EventSource;
+
   beforeEach(() => {
     useUiStore.getState().resetSessionState();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    if (originalEventSource === undefined) {
+      delete (globalThis as { EventSource?: unknown }).EventSource;
+    } else {
+      (globalThis as { EventSource?: unknown }).EventSource =
+        originalEventSource;
+    }
   });
 
   it("launches 1-Click Demo Sandbox from AuthScreen and renders Kanban Board with WIP Limit warning", async () => {
@@ -501,5 +647,173 @@ describe("Phase 2 Core Agile Engine UI", () => {
     expect(
       screen.queryByRole("button", { name: /thêm cột trạng thái/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("opens Deep Issue Detail Drawer with Tiptap description, inline Sub-issue, Issue Relations, @mention comments, and Activity Timeline", async () => {
+    setupMockFetch({ initialAuth: true });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const user = userEvent.setup();
+
+    render(<App queryClient={qc} />);
+
+    // Click ENG-12 card on Kanban Board to open Deep Issue Detail Drawer
+    const card = await screen.findByTestId("issue-card-ENG-12");
+    await user.click(card);
+
+    const drawer = await screen.findByRole("dialog", { name: /ENG-12/i });
+    expect(within(drawer).getByText("ENG-1")).toBeInTheDocument();
+
+    // Tiptap editor displays the issue description
+    expect(
+      await within(drawer).findByText("Phát hiện task bị kẹt quá lâu"),
+    ).toBeInTheDocument();
+
+    // Add inline Sub-issue
+    await user.click(
+      within(drawer).getByRole("button", { name: /thêm sub-issue/i }),
+    );
+    const subInput = within(drawer).getByPlaceholderText(/tiêu đề sub-issue mới/i);
+    await user.type(subInput, "Viết unit test Risk Radar");
+    await user.click(within(drawer).getByRole("button", { name: /^thêm$/i }));
+    expect(
+      await within(drawer).findByText("Viết unit test Risk Radar"),
+    ).toBeInTheDocument();
+
+    // Add and then remove an Issue Relation
+    await user.click(
+      within(drawer).getByRole("button", { name: /thêm liên kết/i }),
+    );
+    const targetSelect = within(drawer).getByLabelText(/chọn issue liên kết/i);
+    await user.selectOptions(
+      targetSelect,
+      "55555555-5555-4555-8555-555555555552",
+    );
+    await user.click(
+      within(drawer).getByRole("button", { name: /^liên kết$/i }),
+    );
+    expect(
+      await within(drawer).findByText("Sửa race condition GitHub Webhook"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(drawer).getByRole("button", { name: /gỡ liên kết eng-13/i }),
+    );
+    await waitFor(() => {
+      expect(
+        within(drawer).queryByRole("button", { name: /gỡ liên kết eng-13/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    // Post a comment using @mention autocomplete
+    const commentInput = within(drawer).getByLabelText(/nội dung bình luận/i);
+    await user.type(commentInput, "Nhờ @Minh");
+    const mentionList = await within(drawer).findByRole("listbox", {
+      name: /nhắc thành viên/i,
+    });
+    await user.click(within(mentionList).getByRole("option", { name: /minh anh/i }));
+    await user.type(commentInput, "kiểm tra giúp nhé");
+    await user.click(within(drawer).getByRole("button", { name: /^gửi$/i }));
+
+    expect(
+      await within(drawer).findByText(/kiểm tra giúp nhé/i),
+    ).toBeInTheDocument();
+
+    // Switch to Activity Log Timeline tab
+    await user.click(
+      within(drawer).getByRole("tab", { name: /lịch sử hoạt động/i }),
+    );
+    expect(
+      await within(drawer).findByText(/đã chuyển trạng thái sang "in progress"/i),
+    ).toBeInTheDocument();
+  });
+
+  it("connects to Workspace SSE stream, displays Live badge, and refetches issues on remote events", async () => {
+    const instances: Array<{
+      listeners: Map<string, Array<(e: MessageEvent<string>) => void>>;
+      emit: (eventName: string, data: unknown) => void;
+    }> = [];
+
+    class MockEventSource {
+      listeners = new Map<string, Array<(e: MessageEvent<string>) => void>>();
+      onerror: (() => void) | null = null;
+      close = vi.fn();
+
+      constructor() {
+        instances.push(this);
+      }
+
+      addEventListener(
+        type: string,
+        listener: (e: MessageEvent<string>) => void,
+      ) {
+        const list = this.listeners.get(type) ?? [];
+        list.push(listener);
+        this.listeners.set(type, list);
+      }
+
+      emit(eventName: string, data: unknown) {
+        const list = this.listeners.get(eventName) ?? [];
+        const evt = new MessageEvent(eventName, {
+          data: JSON.stringify(data),
+        });
+        for (const fn of list) fn(evt);
+      }
+    }
+
+    (globalThis as { EventSource?: unknown }).EventSource = MockEventSource;
+
+    const fetchSpy = setupMockFetch({ initialAuth: true });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(<App queryClient={qc} />);
+    await screen.findByTestId("kanban-column-in-progress");
+
+    await waitFor(() => {
+      expect(instances.length).toBeGreaterThan(0);
+    });
+    const es = instances[instances.length - 1]!;
+
+    // Emit SSE connected event -> Live badge appears
+    act(() => {
+      es.emit("connected", { workspaceId: WS_ID, timestamp: Date.now() });
+    });
+    expect(await screen.findByTestId("realtime-status-pill")).toHaveTextContent(
+      "Live",
+    );
+
+    const issueFetchCountBefore = fetchSpy.mock.calls.filter(([u]) =>
+      String(u).endsWith(`/api/v1/projects/${PROJ_ID}/issues`),
+    ).length;
+
+    // Emit remote issue.moved event from another teammate -> Toast + Refetch
+    act(() => {
+      es.emit("issue.moved", {
+        id: "evt-remote-1",
+        workspaceId: WS_ID,
+        projectId: PROJ_ID,
+        type: "issue.moved",
+        actorId: "u-2",
+        timestamp: Date.now(),
+        payload: {
+          issueId: "55555555-5555-4555-8555-555555555551",
+          identifier: "ENG-12",
+        },
+      });
+    });
+
+    expect(
+      await screen.findByText(/đồng bộ realtime: eng-12 vừa đổi trạng thái/i),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      const issueFetchCountAfter = fetchSpy.mock.calls.filter(([u]) =>
+        String(u).endsWith(`/api/v1/projects/${PROJ_ID}/issues`),
+      ).length;
+      expect(issueFetchCountAfter).toBeGreaterThan(issueFetchCountBefore);
+    });
   });
 });

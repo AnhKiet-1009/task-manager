@@ -4,6 +4,11 @@ import type { SprintDto, WorkflowStateDto } from "../lib/api";
 import type { IssueFilterValues } from "../lib/agileMeta";
 
 export type AgileView = "board" | "backlog" | "epics";
+export type RealtimeStatus =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "reconnecting";
 
 export interface ToastItem {
   id: string;
@@ -37,6 +42,8 @@ interface UiStore {
 
   filters: IssueFilterValues;
 
+  realtimeStatus: RealtimeStatus;
+  issueDrawerId: string | null;
   issueModal: IssueModalState;
   sprintModal: { open: boolean; sprint?: SprintDto };
   completeSprintId: string | null;
@@ -51,6 +58,7 @@ interface UiStore {
   setActiveView: (view: AgileView) => void;
   setBoardSprintId: (id: string | "all" | null) => void;
   setSidebarOpen: (open: boolean) => void;
+  setRealtimeStatus: (status: RealtimeStatus) => void;
 
   setFilters: (partial: Partial<IssueFilterValues>) => void;
   resetFilters: () => void;
@@ -62,6 +70,8 @@ interface UiStore {
     parentId?: string | null;
   }) => void;
   openEditIssueModal: (issueId: string) => void;
+  openIssueDrawer: (issueId: string) => void;
+  closeIssueDrawer: () => void;
   closeIssueModal: () => void;
 
   openSprintModal: (sprint?: SprintDto) => void;
@@ -91,6 +101,8 @@ export const useUiStore = create<UiStore>((set) => ({
 
   filters: DEFAULT_FILTERS,
 
+  realtimeStatus: "idle",
+  issueDrawerId: null,
   issueModal: { open: false, mode: "create" },
   sprintModal: { open: false },
   completeSprintId: null,
@@ -101,12 +113,23 @@ export const useUiStore = create<UiStore>((set) => ({
   toasts: [],
 
   setActiveWorkspaceId: (id) =>
-    set({ activeWorkspaceId: id, activeProjectId: null, boardSprintId: null }),
+    set({
+      activeWorkspaceId: id,
+      activeProjectId: null,
+      boardSprintId: null,
+      issueDrawerId: null,
+    }),
   setActiveProjectId: (id) =>
-    set({ activeProjectId: id, boardSprintId: null, filters: DEFAULT_FILTERS }),
+    set({
+      activeProjectId: id,
+      boardSprintId: null,
+      filters: DEFAULT_FILTERS,
+      issueDrawerId: null,
+    }),
   setActiveView: (view) => set({ activeView: view, sidebarOpen: false }),
   setBoardSprintId: (id) => set({ boardSprintId: id }),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  setRealtimeStatus: (realtimeStatus) => set({ realtimeStatus }),
 
   setFilters: (partial) =>
     set((state) => ({ filters: { ...state.filters, ...partial } })),
@@ -123,10 +146,9 @@ export const useUiStore = create<UiStore>((set) => ({
         defaultParentId: defaults?.parentId ?? null,
       },
     }),
-  openEditIssueModal: (issueId) =>
-    set({
-      issueModal: { open: true, mode: "edit", issueId },
-    }),
+  openEditIssueModal: (issueId) => set({ issueDrawerId: issueId }),
+  openIssueDrawer: (issueId) => set({ issueDrawerId: issueId }),
+  closeIssueDrawer: () => set({ issueDrawerId: null }),
   closeIssueModal: () =>
     set({ issueModal: { open: false, mode: "create" } }),
 
@@ -166,6 +188,8 @@ export const useUiStore = create<UiStore>((set) => ({
       activeProjectId: null,
       activeView: "board",
       boardSprintId: null,
+      realtimeStatus: "idle",
+      issueDrawerId: null,
       filters: DEFAULT_FILTERS,
       issueModal: { open: false, mode: "create" },
       commandPaletteOpen: false,

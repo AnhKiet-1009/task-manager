@@ -11,6 +11,7 @@ import {
   type CreateWorkflowStateInput,
   type CreateWorkspaceInput,
   generateRankBetween,
+  type IssueRelationType,
   type MoveIssueInput,
   type UpdateIssueInput,
   type UpdateSprintInput,
@@ -410,13 +411,20 @@ export function useCreateIssue(projectId: string | null) {
       if (!projectId) throw new Error("Chưa chọn Project.");
       return api.createIssue(projectId, input);
     },
-    onSuccess: async ({ issue }) => {
+    onSuccess: async ({ issue }, vars) => {
+      const invalidations: Promise<unknown>[] = [];
       if (projectId) {
-        await Promise.all([
+        invalidations.push(
           qc.invalidateQueries({ queryKey: queryKeys.issues(projectId) }),
           qc.invalidateQueries({ queryKey: queryKeys.sprints(projectId) }),
-        ]);
+        );
       }
+      if (vars.parentId) {
+        invalidations.push(
+          qc.invalidateQueries({ queryKey: queryKeys.issue(vars.parentId) }),
+        );
+      }
+      await Promise.all(invalidations);
       pushToast(`Đã tạo ${issue.identifier}: ${issue.title}`, "success");
     },
     onError: (err) => {
@@ -582,6 +590,95 @@ export function useCreateComment(projectId: string | null) {
     },
     onError: (err) => {
       pushToast(getErrorMessage(err, "Không thể gửi bình luận."), "error");
+    },
+  });
+}
+
+export function useDeleteComment(projectId: string | null) {
+  const qc = useQueryClient();
+  const pushToast = useUiStore((s) => s.pushToast);
+
+  return useMutation({
+    mutationFn: ({
+      commentId,
+    }: {
+      commentId: string;
+      issueId: string;
+    }) => api.deleteComment(commentId),
+    onSuccess: async (_res, vars) => {
+      await qc.invalidateQueries({ queryKey: queryKeys.issue(vars.issueId) });
+      if (projectId) {
+        await qc.invalidateQueries({ queryKey: queryKeys.issues(projectId) });
+      }
+      pushToast("Đã xóa bình luận.", "info");
+    },
+    onError: (err) => {
+      pushToast(getErrorMessage(err, "Không thể xóa bình luận."), "error");
+    },
+  });
+}
+
+export function useCreateIssueRelation(projectId: string | null) {
+  const qc = useQueryClient();
+  const pushToast = useUiStore((s) => s.pushToast);
+
+  return useMutation({
+    mutationFn: ({
+      issueId,
+      targetIssueId,
+      type,
+    }: {
+      issueId: string;
+      targetIssueId: string;
+      type: IssueRelationType;
+    }) => api.createIssueRelation(issueId, { targetIssueId, type }),
+    onSuccess: async (_res, vars) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.issue(vars.issueId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.issue(vars.targetIssueId) }),
+        projectId
+          ? qc.invalidateQueries({ queryKey: queryKeys.issues(projectId) })
+          : Promise.resolve(),
+      ]);
+      pushToast("Đã thêm liên kết Issue.", "success");
+    },
+    onError: (err) => {
+      pushToast(getErrorMessage(err, "Không thể tạo liên kết Issue."), "error");
+    },
+  });
+}
+
+export function useDeleteIssueRelation(projectId: string | null) {
+  const qc = useQueryClient();
+  const pushToast = useUiStore((s) => s.pushToast);
+
+  return useMutation({
+    mutationFn: ({
+      relationId,
+    }: {
+      relationId: string;
+      issueId: string;
+      targetIssueId?: string;
+    }) => api.deleteIssueRelation(relationId),
+    onSuccess: async (_res, vars) => {
+      const invalidations: Promise<unknown>[] = [
+        qc.invalidateQueries({ queryKey: queryKeys.issue(vars.issueId) }),
+      ];
+      if (vars.targetIssueId) {
+        invalidations.push(
+          qc.invalidateQueries({ queryKey: queryKeys.issue(vars.targetIssueId) }),
+        );
+      }
+      if (projectId) {
+        invalidations.push(
+          qc.invalidateQueries({ queryKey: queryKeys.issues(projectId) }),
+        );
+      }
+      await Promise.all(invalidations);
+      pushToast("Đã gỡ liên kết Issue.", "info");
+    },
+    onError: (err) => {
+      pushToast(getErrorMessage(err, "Không thể gỡ liên kết."), "error");
     },
   });
 }

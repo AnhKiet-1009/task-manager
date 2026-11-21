@@ -25,6 +25,7 @@ import {
   createIssueRelationSchema,
   createIssueSchema,
   generateRankBetween,
+  hasMinimumRole,
   issueListQuerySchema,
   moveIssueSchema,
   updateIssueSchema,
@@ -407,6 +408,8 @@ export const issueRoutes = new Hono<AppEnv>()
             identifier: issues.identifier,
             title: issues.title,
             type: issues.type,
+            stateId: issues.stateId,
+            priority: issues.priority,
           },
         })
         .from(issueRelations)
@@ -421,6 +424,8 @@ export const issueRoutes = new Hono<AppEnv>()
             identifier: issues.identifier,
             title: issues.title,
             type: issues.type,
+            stateId: issues.stateId,
+            priority: issues.priority,
           },
         })
         .from(issueRelations)
@@ -896,16 +901,65 @@ export const issueRoutes = new Hono<AppEnv>()
     },
   )
 
+  .delete("/api/v1/comments/:commentId", requireAuth, async (c) => {
+    const commentId = c.req.param("commentId");
+    const userId = c.var.user!.id;
+
+    const [comment] = await c.var.db
+      .select()
+      .from(comments)
+      .where(eq(comments.id, commentId))
+      .limit(1);
+
+    if (!comment) {
+      throw new AppError(404, "COMMENT_NOT_FOUND", "Không tìm thấy bình luận.");
+    }
+
+    const { project, role } = await assertIssueAccess(
+      c.var.db,
+      comment.issueId,
+      userId,
+      "viewer",
+    );
+
+    if (comment.authorId !== userId && !hasMinimumRole(role, "admin")) {
+      throw new AppError(
+        403,
+        "FORBIDDEN",
+        "Bạn chỉ có thể xóa bình luận của chính mình hoặc cần quyền Admin.",
+      );
+    }
+
+    await c.var.db.delete(comments).where(eq(comments.id, commentId));
+
+    c.var.eventBus.publish({
+      id: crypto.randomUUID(),
+      workspaceId: project.workspaceId,
+      projectId: project.id,
+      type: "issue.updated",
+      actorId: userId,
+      timestamp: Date.now(),
+      payload: {
+        issueId: comment.issueId,
+        action: "comment_deleted",
+        commentId,
+      },
+    });
+
+    return c.json({ deleted: true, id: commentId });
+  })
+
   .post(
     "/api/v1/issues/:issueId/relations",
     requireAuth,
     validateJson(createIssueRelationSchema),
     async (c) => {
       const issueId = c.req.param("issueId");
+      const userId = c.var.user!.id;
       const { project } = await assertIssueAccess(
         c.var.db,
         issueId,
-        c.var.user!.id,
+        userId,
         "member",
       );
       const { targetIssueId, type } = c.req.valid("json");
@@ -944,12 +998,29 @@ export const issueRoutes = new Hono<AppEnv>()
         .onConflictDoNothing()
         .returning();
 
+      if (relation) {
+        c.var.eventBus.publish({
+          id: crypto.randomUUID(),
+          workspaceId: project.workspaceId,
+          projectId: project.id,
+          type: "issue.updated",
+          actorId: userId,
+          timestamp: Date.now(),
+          payload: {
+            issueId,
+            targetIssueId,
+            action: "relation_added",
+          },
+        });
+      }
+
       return c.json({ relation: relation ?? null }, 201);
     },
   )
 
   .delete("/api/v1/issue-relations/:relationId", requireAuth, async (c) => {
     const relationId = c.req.param("relationId");
+    const userId = c.var.user!.id;
     const [relation] = await c.var.db
       .select()
       .from(issueRelations)
@@ -960,16 +1031,30 @@ export const issueRoutes = new Hono<AppEnv>()
       throw new AppError(404, "RELATION_NOT_FOUND", "Không tìm thấy liên kết.");
     }
 
-    await assertIssueAccess(
+    const { project } = await assertIssueAccess(
       c.var.db,
       relation.sourceIssueId,
-      c.var.user!.id,
+      userId,
       "member",
     );
 
     await c.var.db
       .delete(issueRelations)
       .where(eq(issueRelations.id, relationId));
+
+    c.var.eventBus.publish({
+      id: crypto.randomUUID(),
+      workspaceId: project.workspaceId,
+      projectId: project.id,
+      type: "issue.updated",
+      actorId: userId,
+      timestamp: Date.now(),
+      payload: {
+        issueId: relation.sourceIssueId,
+        targetIssueId: relation.targetIssueId,
+        action: "relation_removed",
+      },
+    });
 
     return c.json({ deleted: true, id: relationId });
   });

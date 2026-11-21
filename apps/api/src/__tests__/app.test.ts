@@ -407,4 +407,222 @@ describe("Phase 1 API Integration (Real PostgreSQL via PGlite)", () => {
       .where(eq(workspaces.id, expiredWs.id));
     expect(remaining).toHaveLength(0);
   });
+
+  it("supports comment deletion RBAC, issue relations with realtime broadcast, and SSE workspace stream", async () => {
+    // 1. Sign up Owner (Dan), Member (Eve), and Non-member (Frank)
+    const signUp = async (name: string, email: string) => {
+      const r = await app.request("/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password: "StrongPassword123!" }),
+      });
+      expect(r.status).toBe(200);
+      const data = (await r.json()) as { user: { id: string } };
+      return { userId: data.user.id, cookie: extractCookieHeader(r) };
+    };
+
+    const dan = await signUp("Dan Owner", "dan@rel-test.dev");
+    const eve = await signUp("Eve Member", "eve@rel-test.dev");
+    const frank = await signUp("Frank Outsider", "frank@rel-test.dev");
+
+    // 2. Create workspace + project + 2 issues
+    const wsRes = await app.request("/api/v1/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: dan.cookie },
+      body: JSON.stringify({ name: "Rel Team", slug: "rel-team" }),
+    });
+    const { workspace } = (await wsRes.json()) as { workspace: { id: string } };
+
+    await pg.db.insert(workspaceMembers).values({
+      workspaceId: workspace.id,
+      userId: eve.userId,
+      role: "member",
+    });
+
+    const projRes = await app.request(
+      `/api/v1/workspaces/${workspace.id}/projects`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: dan.cookie },
+        body: JSON.stringify({ name: "Rel Engine", key: "REL" }),
+      },
+    );
+    const { project } = (await projRes.json()) as { project: { id: string } };
+
+    const makeIssue = async (title: string) => {
+      const r = await app.request(`/api/v1/projects/${project.id}/issues`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: dan.cookie },
+        body: JSON.stringify({ title, priority: "high" }),
+      });
+      expect(r.status).toBe(201);
+      const body = (await r.json()) as {
+        issue: { id: string; identifier: string };
+      };
+      return body.issue;
+    };
+
+    const rel1 = await makeIssue("Blocking API issue");
+    const rel2 = await makeIssue("Blocked UI issue");
+
+    // 3. Comment creation & deletion RBAC
+    const danCommentRes = await app.request(
+      `/api/v1/issues/${rel1.id}/comments`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: dan.cookie },
+        body: JSON.stringify({ bodyMd: "Cần xử lý trước @Eve Member" }),
+      },
+    );
+    expect(danCommentRes.status).toBe(201);
+    const { comment: danComment } = (await danCommentRes.json()) as {
+      comment: { id: string };
+    };
+
+    // Another member cannot delete Dan's comment -> 403
+    const eveDeleteForbidden = await app.request(
+      `/api/v1/comments/${danComment.id}`,
+      { method: "DELETE", headers: { Cookie: eve.cookie } },
+    );
+    expect(eveDeleteForbidden.status).toBe(403);
+
+    // Dan (author) deletes his own comment -> 200
+    const eventSpy = vi.fn();
+    const unsub = bus.subscribe(workspace.id, eventSpy);
+
+    const danDeleteOk = await app.request(
+      `/api/v1/comments/${danComment.id}`,
+      { method: "DELETE", headers: { Cookie: dan.cookie } },
+    );
+    expect(danDeleteOk.status).toBe(200);
+    expect(eventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "issue.updated",
+        payload: expect.objectContaining({
+          issueId: rel1.id,
+          action: "comment_deleted",
+        }),
+      }),
+    );
+
+    // 4. Issue Relations (self-relation guard, create, inspect outgoing/incoming, delete)
+    const selfRelRes = await app.request(
+      `/api/v1/issues/${rel1.id}/relations`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: dan.cookie },
+        body: JSON.stringify({ targetIssueId: rel1.id, type: "blocks" }),
+      },
+    );
+    expect(selfRelRes.status).toBe(400);
+    const selfErr = (await selfRelRes.json()) as { error: { code: string } };
+    expect(selfErr.error.code).toBe("SELF_RELATION_FORBIDDEN");
+
+    const relCreateRes = await app.request(
+      `/api/v1/issues/${rel1.id}/relations`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: dan.cookie },
+        body: JSON.stringify({ targetIssueId: rel2.id, type: "blocks" }),
+      },
+    );
+    expect(relCreateRes.status).toBe(201);
+    const { relation } = (await relCreateRes.json()) as {
+      relation: { id: string };
+    };
+    expect(relation.id).toBeTruthy();
+
+    expect(eventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "issue.updated",
+        payload: expect.objectContaining({
+          issueId: rel1.id,
+          targetIssueId: rel2.id,
+          action: "relation_added",
+        }),
+      }),
+    );
+
+    // Verify enriched outgoing/incoming relations include stateId & priority
+    const detail1Res = await app.request(`/api/v1/issues/${rel1.id}`, {
+      headers: { Cookie: eve.cookie },
+    });
+    const detail1 = (await detail1Res.json()) as {
+      issue: {
+        relations: {
+          outgoing: Array<{
+            id: string;
+            type: string;
+            targetIssue: { identifier: string; stateId: string; priority: string };
+          }>;
+        };
+      };
+    };
+    expect(detail1.issue.relations.outgoing[0]).toMatchObject({
+      type: "blocks",
+      targetIssue: { identifier: rel2.identifier, priority: "high" },
+    });
+    expect(detail1.issue.relations.outgoing[0]?.targetIssue.stateId).toBeTruthy();
+
+    const detail2Res = await app.request(`/api/v1/issues/${rel2.id}`, {
+      headers: { Cookie: eve.cookie },
+    });
+    const detail2 = (await detail2Res.json()) as {
+      issue: {
+        relations: {
+          incoming: Array<{
+            type: string;
+            sourceIssue: { identifier: string; stateId: string };
+          }>;
+        };
+      };
+    };
+    expect(detail2.issue.relations.incoming[0]).toMatchObject({
+      type: "blocks",
+      sourceIssue: { identifier: rel1.identifier },
+    });
+
+    const relDeleteRes = await app.request(
+      `/api/v1/issue-relations/${relation.id}`,
+      { method: "DELETE", headers: { Cookie: eve.cookie } },
+    );
+    expect(relDeleteRes.status).toBe(200);
+    expect(eventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "issue.updated",
+        payload: expect.objectContaining({
+          issueId: rel1.id,
+          targetIssueId: rel2.id,
+          action: "relation_removed",
+        }),
+      }),
+    );
+    unsub();
+
+    // 5. SSE Events endpoint auth & stream verification
+    const sseUnauth = await app.request(
+      `/api/v1/workspaces/${workspace.id}/events`,
+    );
+    expect(sseUnauth.status).toBe(401);
+
+    const sseForbidden = await app.request(
+      `/api/v1/workspaces/${workspace.id}/events`,
+      { headers: { Cookie: frank.cookie } },
+    );
+    expect(sseForbidden.status).toBe(403);
+
+    const sseOk = await app.request(
+      `/api/v1/workspaces/${workspace.id}/events`,
+      { headers: { Cookie: eve.cookie } },
+    );
+    expect(sseOk.status).toBe(200);
+    expect(sseOk.headers.get("content-type")).toContain("text/event-stream");
+
+    const reader = sseOk.body!.getReader();
+    const { value } = await reader.read();
+    const chunkText = new TextDecoder().decode(value);
+    expect(chunkText).toContain("event: connected");
+    expect(chunkText).toContain(workspace.id);
+    await reader.cancel();
+  });
 });
