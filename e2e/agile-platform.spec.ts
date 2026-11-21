@@ -50,6 +50,12 @@ test.describe("TaskManager Full-Stack E2E (Real Hono API + PGlite + Vite Web)", 
         .getByTestId("kanban-column-in-progress")
         .getByText(/vượt giới hạn wip \(6\/5\)/i),
     ).toBeVisible();
+
+    // Clicking "Thoát" immediately returns to the Login / Sandbox screen without extra clicks
+    await page.getByRole("button", { name: /thoát/i }).click();
+    await expect(
+      page.getByRole("button", { name: /trải nghiệm demo 1-click/i }),
+    ).toBeVisible();
   });
 
   test("supports Deep Issue Drawer (Tiptap, Sub-issue, @mention, Activity Timeline) and 2-tab SSE Realtime Sync", async ({

@@ -368,6 +368,11 @@ function setupMockFetch(options: {
         );
       }
 
+      if (url.endsWith("/api/auth/sign-out") && method === "POST") {
+        authed = false;
+        return jsonResponse({ success: true });
+      }
+
       if (url.endsWith("/api/v1/me")) {
         return authed
           ? jsonResponse(mePayload())
@@ -1288,6 +1293,32 @@ describe("Phase 2 Core Agile Engine UI", () => {
     );
     expect(
       await screen.findByText(/không giới hạn \(byok\)/i),
+    ).toBeInTheDocument();
+  });
+
+  it("immediately returns to the login screen when clicking Thoát (Sign Out) without requiring extra clicks", async () => {
+    setupMockFetch({ initialAuth: true });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const user = userEvent.setup();
+
+    render(<App queryClient={qc} />);
+    await screen.findByTestId("kanban-column-in-progress");
+
+    await user.click(screen.getByRole("button", { name: /thoát/i }));
+
+    expect(
+      await screen.findByRole("button", { name: /trải nghiệm demo 1-click/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Đã đăng xuất.")).toBeInTheDocument();
+
+    // Signing back into Sandbox works cleanly after logout
+    await user.click(
+      screen.getByRole("button", { name: /trải nghiệm demo 1-click/i }),
+    );
+    expect(
+      await screen.findByTestId("kanban-column-in-progress"),
     ).toBeInTheDocument();
   });
 });

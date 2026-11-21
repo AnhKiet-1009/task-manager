@@ -30,7 +30,7 @@ import {
   type WorkflowStateDto,
 } from "../lib/api";
 import { sortByLexoRank } from "../lib/agileMeta";
-import { queryKeys } from "../lib/queryClient";
+import { clearPersistedQueryCache, queryKeys } from "../lib/queryClient";
 import { useUiStore } from "../stores/uiStore";
 
 function getErrorMessage(err: unknown, fallback: string): string {
@@ -122,10 +122,18 @@ export function useSignOut() {
 
   return useMutation({
     mutationFn: api.signOut,
-    onSuccess: () => {
-      qc.clear();
+    onSuccess: async () => {
+      await qc.cancelQueries();
+      qc.setQueryData(queryKeys.me, null);
+      qc.removeQueries({
+        predicate: (query) => query.queryKey[0] !== queryKeys.me[0],
+      });
+      await clearPersistedQueryCache();
       resetSessionState();
       pushToast("Đã đăng xuất.", "info");
+    },
+    onError: (err) => {
+      pushToast(getErrorMessage(err, "Không thể đăng xuất."), "error");
     },
   });
 }

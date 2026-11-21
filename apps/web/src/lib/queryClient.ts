@@ -75,3 +75,12 @@ export function createIdbPersister(): Persister {
     },
   };
 }
+
+export async function clearPersistedQueryCache(): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  try {
+    await del(IDB_CACHE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}

@@ -265,9 +265,10 @@ export function Sidebar({
           </button>
           <button
             type="button"
+            disabled={signOut.isPending}
             onClick={() => signOut.mutate()}
             title="Đăng xuất"
-            className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-50 transition cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             Thoát
